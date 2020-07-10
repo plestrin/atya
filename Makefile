@@ -4,7 +4,7 @@ LDFLAGS :=
 
 all: atya
 
-atya: main.o gory_sewer.o utile.o index.o simple_index.o hash.o
+atya: main.o gory_sewer.o utile.o index.o simple_index.o last_index.o hash.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
 test: test_last_index

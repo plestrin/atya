@@ -72,7 +72,11 @@ int main(int argc, char** argv){
 		last_index_push(&li, file_data + i, PUSH_SIZE);
 	}
 
+	printf("Nb item before : %lu\n", li.nb_item);
+
 	last_index_exclude_file(&li, argv[1]);
+
+	printf("Nb item after : %lu\n", li.nb_item);
 
 	for (i = 0; i < 0x10000; i++){
 		if (li.index[i] != NULL){

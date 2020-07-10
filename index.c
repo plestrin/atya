@@ -391,18 +391,3 @@ int index_root_do_exclude(struct index_root* ir){
 
 	return !nb_valid;
 }
-
-void index_root_do_dump(struct index_root* ir){
-	uint8_t* value;
-	int cont;
-	uint64_t cnt;
-
-	value = alloca(ir->size);
-	for (cont = index_root_do_get_first(ir, value, 0), cnt = 0; cont; cont = index_root_do_get_next(ir, value, 0), cnt ++){
-		fwrite(&ir->size, 1, 4, stdout);
-		fwrite(value, 1, ir->size, stdout);
-	}
-	if (cnt){
-		fprintf(stderr, "[+] index of size %3zu has %6lu element(s)\n", ir->size, cnt);
-	}
-}

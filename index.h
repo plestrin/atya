@@ -25,8 +25,6 @@ void index_root_do_compare_buffer(struct index_root* ir, const uint8_t* buffer, 
 int index_root_do_intersect(struct index_root* ir);
 int index_root_do_exclude(struct index_root* ir);
 
-void index_root_do_dump(struct index_root* ir);
-
 void index_root_do_clean(struct index_root* ir);
 void index_root_do_delete(struct index_root* ir);
 

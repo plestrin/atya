@@ -54,14 +54,16 @@ static int last_entry_push(struct last_entry* le, const uint8_t* data, size_t si
 	return 0;
 }
 
-static void last_entry_exclude(struct last_entry* le, const uint8_t* data, size_t size){
+static uint64_t last_entry_exclude(struct last_entry* le, const uint8_t* data, size_t size){
 	size_t offset_read;
 	size_t offset_write;
 	size_t item_size;
+	uint64_t nb_item;
 
-	for (offset_read = 0, offset_write = 0; offset_read < le->used_size; offset_read += sizeof(size_t) + item_size){
+	for (offset_read = 0, offset_write = 0, nb_item = 0; offset_read < le->used_size; offset_read += sizeof(size_t) + item_size){
 		item_size = *(size_t*)(le->ptr + offset_read);
 		if (item_size <= size && !memcmp(le->ptr + offset_read + sizeof(size_t), data, item_size)){
+			nb_item ++;
 			continue;
 		}
 		if (offset_write != offset_read){
@@ -71,6 +73,8 @@ static void last_entry_exclude(struct last_entry* le, const uint8_t* data, size_
 	}
 
 	le->used_size = offset_write;
+
+	return nb_item;
 }
 
 static void last_entry_dump(struct last_entry* le, FILE* stream){
@@ -112,6 +116,7 @@ int last_index_push(struct last_index* li, const uint8_t* data, size_t size){
 	}
 
 	if (!(status = last_entry_push(li->index[hash], data, size))){
+		li->nb_item ++;
 		if (size > li->max_size){
 			li->max_size = size;
 		}
@@ -127,7 +132,7 @@ void last_index_exclude_buffer(struct last_index* li, const uint8_t* buffer, siz
 	for (offset = 0; offset + overlap <= size; offset ++){
 		hash = hash_init(buffer + offset, li->min_size);
 		if (li->index[hash] != NULL){
-			last_entry_exclude(li->index[hash], buffer + offset, size - offset);
+			li->nb_item -= last_entry_exclude(li->index[hash], buffer + offset, size - offset);
 			if (!li->index[hash]->used_size){
 				last_entry_delete(li->index[hash]);
 				li->index[hash] = NULL;
@@ -136,7 +141,7 @@ void last_index_exclude_buffer(struct last_index* li, const uint8_t* buffer, siz
 	}
 }
 
-static uint8_t chunk[0x1000];
+static uint8_t chunk[0x10000];
 
 int last_index_exclude_file(struct last_index* li, const char* file_name){
 	FILE* handle;
@@ -183,6 +188,8 @@ void last_index_dump(struct last_index* li, FILE* steam){
 			last_entry_dump(li->index[i], steam);
 		}
 	}
+
+	fprintf(stderr, "[-] %lu patterns dumped\n", li->nb_item);
 }
 
 void last_index_clean(struct last_index* li){

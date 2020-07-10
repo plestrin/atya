@@ -62,12 +62,15 @@ static inline int simple_index_get_hash_next(struct simple_index* si, uint8_t* v
 	return simple_index_get_hash(si, value, hash, iter);
 }
 
-uint64_t simple_index_remove_hit(struct simple_index* si);
-uint64_t simple_index_count_hit(struct simple_index* si);
-uint64_t simple_index_remove_nohit(struct simple_index* si);
-uint64_t simple_index_count_nohit(struct simple_index* si);
+uint64_t simple_index_remove(struct simple_index* si, uint8_t sel);
 
-void simple_index_dump(struct simple_index* si);
+static inline uint64_t simple_index_remove_hit(struct simple_index* si){
+	return simple_index_remove(si, 1);
+}
+
+static inline uint64_t simple_index_remove_nohit(struct simple_index* si){
+	return simple_index_remove(si, 0);
+}
 
 void simple_index_clean(struct simple_index* si);
 

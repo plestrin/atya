@@ -82,36 +82,6 @@ static uint32_t simple_entry_remove(struct simple_entry* se, size_t size, uint8_
 	return j;
 }
 
-static uint32_t simple_entry_count_hit(struct simple_entry* se, size_t size){
-	uint32_t i;
-	uint32_t cnt;
-	uint8_t* item;
-
-	for (i = 0, cnt = 0; i < se->nb_used; i++){
-		item = simple_entry_get_item(se, i, size);
-		if (item[0]){
-			cnt ++;
-		}
-	}
-
-	return cnt;
-}
-
-static uint32_t simple_entry_count_nohit(struct simple_entry* se, size_t size){
-	uint32_t i;
-	uint32_t cnt;
-	uint8_t* item;
-
-	for (i = 0, cnt = 0; i < se->nb_used; i++){
-		item = simple_entry_get_item(se, i, size);
-		if (!item[0]){
-			cnt ++;
-		}
-	}
-
-	return cnt;
-}
-
 static int simple_entry_get(struct simple_entry* se, uint8_t* value, uint32_t* idx, size_t size){
 	if (*idx < se->nb_used){
 		memcpy(value, simple_entry_get_item(se, *idx, size) + 1, size);
@@ -135,17 +105,6 @@ static int simple_entry_get_masked(struct simple_entry* se, uint8_t* value, uint
 	}
 
 	return 0;
-}
-
-static uint32_t simple_entry_dump(struct simple_entry* se, size_t size){
-	uint32_t i;
-
-	for (i = 0; i < se->nb_used; i++){
-		fwrite(&size, 1, 4, stdout);
-		fwrite(simple_entry_get_item(se, i, size) + 1, size, 1, stdout);
-	}
-
-	return se->nb_used;
 }
 
 int simple_index_create(struct simple_index** si, size_t size){
@@ -248,55 +207,6 @@ uint64_t simple_index_remove(struct simple_index* si, uint8_t sel){
 	}
 
 	return cnt;
-}
-
-uint64_t simple_index_remove_hit(struct simple_index* si){
-	return simple_index_remove(si, 1);
-}
-
-uint64_t simple_index_count_hit(struct simple_index* si){
-	uint32_t i;
-	uint64_t cnt;
-
-	for (i = 0, cnt = 0; i < 0x10000; i++){
-		if (si->index[i] != NULL){
-			cnt += simple_entry_count_hit(si->index[i], si->size);
-		}
-	}
-
-	return cnt;
-}
-
-uint64_t simple_index_count_nohit(struct simple_index* si){
-	uint32_t i;
-	uint64_t cnt;
-
-	for (i = 0, cnt = 0; i < 0x10000; i++){
-		if (si->index[i] != NULL){
-			cnt += simple_entry_count_nohit(si->index[i], si->size);
-		}
-	}
-
-	return cnt;
-}
-
-uint64_t simple_index_remove_nohit(struct simple_index* si){
-	return simple_index_remove(si, 0);
-}
-
-void simple_index_dump(struct simple_index* si){
-	uint32_t i;
-	uint64_t cnt;
-
-	for (i = 0, cnt = 0; i < 0x10000; i ++){
-		if (si->index[i] != NULL){
-			cnt += simple_entry_dump(si->index[i], si->size);
-		}
-	}
-	if (cnt){
-		fprintf(stderr, "[+] index of size %3zu has %6lu element(s)\n", si->size, cnt);
-		fflush(stdout);
-	}
 }
 
 void simple_index_clean(struct simple_index* si){
