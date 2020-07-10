@@ -189,7 +189,7 @@ void last_index_dump(struct last_index* li, FILE* steam){
 		}
 	}
 
-	fprintf(stderr, "[-] %lu patterns dumped\n", li->nb_item);
+	fprintf(stderr, "[+] in %s, %lu patterns dumped\n", __func__, li->nb_item);
 }
 
 void last_index_clean(struct last_index* li){

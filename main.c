@@ -130,11 +130,10 @@ static int root_compare_file(struct index_root* ir, const char* file_name){
 	return 0;
 }
 
-static int simple_compare_file(struct simple_index* si, const char* file_name, uint64_t* cnt_ptr){
+static int simple_compare_file(struct simple_index* si, const char* file_name){
 	FILE* handle;
 	int status;
 	size_t rd_sz;
-	uint64_t cnt;
 
 	if ((handle = fopen(file_name, "rb")) == NULL){
 		status = errno;
@@ -143,8 +142,8 @@ static int simple_compare_file(struct simple_index* si, const char* file_name, u
 	}
 
 	rd_sz = fread(chunk, 1, sizeof chunk, handle);
-	for (cnt = 0; ; ){
-		cnt = simple_index_compare_buffer(si, chunk, rd_sz);
+	for ( ; ; ){
+		simple_index_compare_buffer(si, chunk, rd_sz);
 		memmove(chunk, chunk + rd_sz - si->size + 1, si->size - 1);
 		rd_sz = fread(chunk + si->size - 1, 1, (sizeof chunk) - si->size + 1, handle);
 		if (!rd_sz){
@@ -154,10 +153,6 @@ static int simple_compare_file(struct simple_index* si, const char* file_name, u
 	}
 
 	fclose(handle);
-
-	if (cnt_ptr != NULL){
-		*cnt_ptr = cnt;
-	}
 
 	return 0;
 }
@@ -182,7 +177,7 @@ static int simple_intersect_files(struct simple_index* si, struct gory_sewer_kno
 	int status = 0;
 
 	for (file_path = gory_sewer_first(gsk_files); file_path != NULL; file_path = gory_sewer_next(gsk_files)){
-		if ((status = simple_compare_file(si, file_path, NULL))){
+		if ((status = simple_compare_file(si, file_path))){
 			fprintf(stderr, "[-] in %s, unable to compare to file: %s\n", __func__, file_path);
 			break;
 		}
@@ -208,13 +203,8 @@ static int index_root_create(struct gory_sewer_knob* gsk_files, size_t index_siz
 		return 0;
 	}
 
-	if ((status = insert_file(ir, first_file_path))){
+	if ((status = insert_file(ir, first_file_path)) || (status = root_intersect_files(ir, gsk_files))){
 		index_root_do_clean(ir);
-	}
-	else {
-		if ((status = root_intersect_files(ir, gsk_files))){
-			index_root_do_clean(ir);
-		}
 	}
 
 	return status;
@@ -465,18 +455,12 @@ int main(int argc, char** argv){
 
 	exit:
 
-	last_index_exclude_files(&li, gsk_ex);
-	last_index_dump(&li, stdout);
-
 	if (ir_buffer[0] != NULL){
 		index_root_do_delete(ir_buffer[0]);
 	}
 	if (ir_buffer[1] != NULL){
 		index_root_do_delete(ir_buffer[1]);
 	}
-
-	gory_sewer_delete(gsk_in);
-	gory_sewer_delete(gsk_ex);
 
 	if (si_buffer[0] != NULL){
 		simple_index_delete(si_buffer[0]);
@@ -485,7 +469,12 @@ int main(int argc, char** argv){
 		simple_index_delete(si_buffer[1]);
 	}
 
+	last_index_exclude_files(&li, gsk_ex);
+	last_index_dump(&li, stdout);
 	last_index_clean(&li);
+
+	gory_sewer_delete(gsk_in);
+	gory_sewer_delete(gsk_ex);
 
 	return status;
 }
