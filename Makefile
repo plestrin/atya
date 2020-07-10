@@ -2,7 +2,9 @@ CC := clang
 CFLAGS := -Wall -Wextra -O3
 LDFLAGS :=
 
-atya: main.o gory_sewer.o utile.o index.o simple_index.o
+all: atya
+
+atya: main.o gory_sewer.o utile.o index.o simple_index.o hash.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
 %.o: %.c

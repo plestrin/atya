@@ -5,13 +5,12 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "hash.h"
+
 struct simple_entry {
 	uint32_t nb_alloc;
 	uint32_t nb_used;
 };
-
-uint16_t hash_init(const uint8_t* data, size_t size);
-uint16_t hash_update(uint16_t hash, uint8_t old, uint8_t new, size_t size);
 
 struct simple_index {
 	size_t size;
