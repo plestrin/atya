@@ -27,7 +27,7 @@ static int push_root_index(struct last_index* li, struct index_root* ir){
 	}
 
 	if (cnt){
-		fprintf(stderr, "[+] %5lu patterns of size %3zu\n", cnt, ir->size);
+		fprintf(stderr, "[+] %5lu patterns of size %4zu\n", cnt, ir->size);
 	}
 
 	return 0;
@@ -49,7 +49,7 @@ static int push_simple_index(struct last_index* li, struct simple_index* si){
 	}
 
 	if (cnt){
-		fprintf(stderr, "[+] %5lu patterns of size %3zu\n", cnt, si->size);
+		fprintf(stderr, "[+] %5lu patterns of size %4zu\n", cnt, si->size);
 	}
 
 	return 0;
@@ -66,6 +66,7 @@ static int last_index_exclude_files(struct last_index* li, struct gory_sewer_kno
 			fprintf(stderr, "[-] in %s, unable to exclude file: %s\n", __func__, file_path);
 			break;
 		}
+
 	}
 
 	return status;
@@ -181,8 +182,8 @@ static int simple_intersect_files(struct simple_index* si, struct gory_sewer_kno
 			fprintf(stderr, "[-] in %s, unable to compare to file: %s\n", __func__, file_path);
 			break;
 		}
+		simple_index_remove_nohit(si);
 	}
-	simple_index_remove_nohit(si);
 
 	return status;
 }
@@ -344,8 +345,8 @@ static int index_simple_next(struct simple_index* si, struct gory_sewer_knob* gs
 }
 
 #define START 4
-#define SIMPLE 12
-#define STOP 4096
+#define SIMPLE 10
+#define STOP 8192
 
 static char path[4096];
 
