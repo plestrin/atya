@@ -87,6 +87,22 @@ static void last_entry_dump(struct last_entry* le, FILE* stream){
 	}
 }
 
+static int last_entry_cat(struct last_index* li_dst, struct last_entry* le){
+	size_t offset;
+	size_t item_size;
+	int status;
+
+	for (offset = 0; offset < le->used_size; offset += item_size + sizeof(size_t)){
+		item_size = *(size_t*)(le->ptr + offset);
+		if ((status = last_index_push(li_dst, le->ptr + offset + sizeof(size_t), item_size))){
+			fprintf(stderr, "[-] in %s, unable to push item\n", __func__);
+			break;
+		}
+	}
+
+	return status;
+}
+
 static void last_entry_delete(struct last_entry* le){
 	free(le->ptr);
 	free(le);
@@ -190,6 +206,21 @@ void last_index_dump(struct last_index* li, FILE* steam){
 	}
 
 	fprintf(stderr, "[+] in %s, %lu patterns dumped\n", __func__, li->nb_item);
+}
+
+int last_index_cat(struct last_index* li_dst, struct last_index* li_src){
+	uint32_t i;
+	int status;
+
+	for (i = 0; i < 0x10000; i++){
+		if (li_src->index[i] != NULL){
+			if ((status = last_entry_cat(li_dst, li_src->index[i]))){
+				break;
+			}
+		}
+	}
+
+	return status;
 }
 
 void last_index_clean(struct last_index* li){

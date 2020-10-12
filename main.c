@@ -66,7 +66,6 @@ static int last_index_exclude_files(struct last_index* li, struct gory_sewer_kno
 			fprintf(stderr, "[-] in %s, unable to exclude file: %s\n", __func__, file_path);
 			break;
 		}
-
 	}
 
 	return status;
@@ -346,7 +345,7 @@ static int index_simple_next(struct simple_index* si, struct gory_sewer_knob* gs
 
 #define START 4
 #define SIMPLE 10
-#define STOP 8192
+#define STOP 16384
 
 static char path[4096];
 

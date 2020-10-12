@@ -28,6 +28,8 @@ int last_index_exclude_file(struct last_index* li, const char* file_name);
 
 void last_index_dump(struct last_index* li, FILE* stream);
 
+int last_index_cat(struct last_index* li_dst, struct last_index* li_src);
+
 void last_index_clean(struct last_index* li);
 
 #endif
