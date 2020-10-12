@@ -2,20 +2,28 @@ CC := clang
 CFLAGS := -Wall -Wextra -O3
 LDFLAGS :=
 
-all: atya
+all: build atya
 
-atya: main.o gory_sewer.o utile.o index.o simple_index.o last_index.o hash.o
+build:
+	mkdir -p build
+
+atya: build/main.o build/gory_sewer.o build/utile.o build/index.o build/simple_index.o build/last_index.o build/hash.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
-test: test_last_index
+.PHONY: test
+test: build test_last_index
 
-test_last_index: test_last_index.o last_index.o hash.o
+test_last_index: build/test_last_index.o build/last_index.o build/hash.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
-%.o: %.c
+build/%.o: src/%.c
 	$(CC) $(CFLAGS) -o $@ -c $<
 
+build/%.o: test/%.c
+	$(CC) $(CFLAGS) -o $@ -c $< -Isrc
+
+.PHONY: clean
 clean:
-	@ rm -f *.o
+	@ rm -rf build
 	@ rm -f atya
 	@ rm -f test_last_index
