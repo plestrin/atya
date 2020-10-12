@@ -54,27 +54,27 @@ static int last_entry_push(struct last_entry* le, const uint8_t* data, size_t si
 	return 0;
 }
 
-static uint64_t last_entry_exclude(struct last_entry* le, const uint8_t* data, size_t size){
+static void last_entry_exclude(struct last_entry* le, const uint8_t* data, size_t size){
 	size_t offset_read;
 	size_t offset_write;
 	size_t item_size;
-	uint64_t nb_item;
 
-	for (offset_read = 0, offset_write = 0, nb_item = 0; offset_read < le->used_size; offset_read += sizeof(size_t) + item_size){
+	for (offset_read = 0; offset_read < le->used_size; offset_read += sizeof(size_t) + item_size){
 		item_size = *(size_t*)(le->ptr + offset_read);
 		if (item_size <= size && !memcmp(le->ptr + offset_read + sizeof(size_t), data, item_size)){
-			nb_item ++;
-			continue;
+
+			for (offset_write = offset_read, offset_read += sizeof(size_t) + item_size; offset_read < le->used_size; offset_read += sizeof(size_t) + item_size){
+				item_size = *(size_t*)(le->ptr + offset_read);
+				memmove(le->ptr + offset_write, le->ptr + offset_read, sizeof(size_t) + item_size);
+				offset_write += sizeof(size_t) + item_size;
+			}
+
+			le->used_size = offset_write;
+			le->nb_item --;
+
+			return;
 		}
-		if (offset_write != offset_read){
-			memmove(le->ptr + offset_write, le->ptr + offset_read, sizeof(size_t) + item_size);
-		}
-		offset_write += sizeof(size_t) + item_size;
 	}
-
-	le->used_size = offset_write;
-
-	return nb_item;
 }
 
 static void last_entry_dump(struct last_entry* le, FILE* stream){
@@ -85,22 +85,6 @@ static void last_entry_dump(struct last_entry* le, FILE* stream){
 		item_size = *(size_t*)(le->ptr + offset);
 		fwrite(le->ptr + offset, item_size + sizeof(size_t), 1, stream);
 	}
-}
-
-static int last_entry_cat(struct last_index* li_dst, struct last_entry* le){
-	size_t offset;
-	size_t item_size;
-	int status;
-
-	for (offset = 0; offset < le->used_size; offset += item_size + sizeof(size_t)){
-		item_size = *(size_t*)(le->ptr + offset);
-		if ((status = last_index_push(li_dst, le->ptr + offset + sizeof(size_t), item_size))){
-			fprintf(stderr, "[-] in %s, unable to push item\n", __func__);
-			break;
-		}
-	}
-
-	return status;
 }
 
 static void last_entry_delete(struct last_entry* le){
@@ -148,7 +132,7 @@ void last_index_exclude_buffer(struct last_index* li, const uint8_t* buffer, siz
 	for (offset = 0; offset + overlap <= size; offset ++){
 		hash = hash_init(buffer + offset, li->min_size);
 		if (li->index[hash] != NULL){
-			li->nb_item -= last_entry_exclude(li->index[hash], buffer + offset, size - offset);
+			last_entry_exclude(li->index[hash], buffer + offset, size - offset);
 			if (!li->index[hash]->used_size){
 				last_entry_delete(li->index[hash]);
 				li->index[hash] = NULL;
@@ -220,22 +204,6 @@ void last_index_dump_and_clean(struct last_index* li, FILE* steam){
 	}
 
 	fprintf(stderr, "[+] in %s, %lu patterns dumped\n", __func__, li->nb_item);
-}
-
-
-int last_index_cat(struct last_index* li_dst, struct last_index* li_src){
-	uint32_t i;
-	int status;
-
-	for (i = 0; i < 0x10000; i++){
-		if (li_src->index[i] != NULL){
-			if ((status = last_entry_cat(li_dst, li_src->index[i]))){
-				break;
-			}
-		}
-	}
-
-	return status;
 }
 
 void last_index_clean(struct last_index* li){
