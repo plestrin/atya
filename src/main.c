@@ -5,29 +5,29 @@
 #include <string.h>
 #include <alloca.h>
 
-#include "index.h"
+#include "fast_index.h"
 #include "simple_index.h"
 #include "last_index.h"
 #include "gory_sewer.h"
 #include "utile.h"
 
-static int push_root_index(struct last_index* li, struct index_root* ir){
+static int push_root_index(struct last_index* li, struct fast_index* fi){
 	uint8_t* value;
 	int cont;
 	uint64_t cnt;
 	int status;
 
-	value = alloca(ir->size);
+	value = alloca(fi->size);
 
-	for (cont = index_root_do_get_first(ir, value, 0), cnt = 0; cont; cont = index_root_do_get_next(ir, value, 0), cnt ++){
-		if ((status = last_index_push(li, value, ir->size))){
+	for (cont = fast_index_get_first(fi, value, 0), cnt = 0; cont; cont = fast_index_get_next(fi, value, 0), cnt ++){
+		if ((status = last_index_push(li, value, fi->size))){
 			fprintf(stderr, "[-] in %s, unable to push data to last index\n", __func__);
 			return status;
 		}
 	}
 
 	if (cnt){
-		fprintf(stderr, "[+] %5lu patterns of size %4zu\n", cnt, ir->size);
+		fprintf(stderr, "[+] %5lu patterns of size %4zu\n", cnt, fi->size);
 	}
 
 	return 0;
@@ -73,7 +73,7 @@ static int last_index_exclude_files(struct last_index* li, struct gory_sewer_kno
 
 static uint8_t chunk[0x10000];
 
-static int insert_file(struct index_root* ir, const char* file_name){
+static int insert_file(struct fast_index* fi, const char* file_name){
 	FILE* handle;
 	int status;
 	size_t size;
@@ -86,16 +86,16 @@ static int insert_file(struct index_root* ir, const char* file_name){
 
 	size = fread(chunk, 1, sizeof chunk, handle);
 	for ( ; ; ){
-		if ((status = index_root_do_insert_buffer(ir, chunk, size))){
+		if ((status = fast_index_insert_buffer(fi, chunk, size))){
 			fprintf(stderr, "[-] in %s, unable to index buffer in %s\n", __func__, file_name);
 			break;
 		}
-		memmove(chunk, chunk + size - ir->size + 1, ir->size - 1);
-		size = fread(chunk + ir->size - 1, 1, sizeof chunk - ir->size + 1, handle);
+		memmove(chunk, chunk + size - fi->size + 1, fi->size - 1);
+		size = fread(chunk + fi->size - 1, 1, sizeof chunk - fi->size + 1, handle);
 		if (!size){
 			break;
 		}
-		size += ir->size - 1;
+		size += fi->size - 1;
 	}
 
 	fclose(handle);
@@ -103,7 +103,7 @@ static int insert_file(struct index_root* ir, const char* file_name){
 	return status;
 }
 
-static int root_compare_file(struct index_root* ir, const char* file_name){
+static int fast_compare_file(struct fast_index* fi, const char* file_name){
 	FILE* handle;
 	int status;
 	size_t rd_sz;
@@ -116,13 +116,13 @@ static int root_compare_file(struct index_root* ir, const char* file_name){
 
 	rd_sz = fread(chunk, 1, sizeof chunk, handle);
 	for ( ; ; ){
-		index_root_do_compare_buffer(ir, chunk, rd_sz);
-		memmove(chunk, chunk + rd_sz - ir->size + 1, ir->size - 1);
-		rd_sz = fread(chunk + ir->size - 1, 1, (sizeof chunk) - ir->size + 1, handle);
+		fast_index_compare_buffer(fi, chunk, rd_sz);
+		memmove(chunk, chunk + rd_sz - fi->size + 1, fi->size - 1);
+		rd_sz = fread(chunk + fi->size - 1, 1, (sizeof chunk) - fi->size + 1, handle);
 		if (!rd_sz){
 			break;
 		}
-		rd_sz += ir->size - 1;
+		rd_sz += fi->size - 1;
 	}
 
 	fclose(handle);
@@ -157,16 +157,16 @@ static int simple_compare_file(struct simple_index* si, const char* file_name){
 	return 0;
 }
 
-static int root_intersect_files(struct index_root* ir, struct gory_sewer_knob* gsk_files){
+static int fast_intersect_files(struct fast_index* fi, struct gory_sewer_knob* gsk_files){
 	char* file_path;
 	int status = 0;
 
 	for (file_path = gory_sewer_first(gsk_files); file_path != NULL; file_path = gory_sewer_next(gsk_files)){
-		if ((status = root_compare_file(ir, file_path))){
+		if ((status = fast_compare_file(fi, file_path))){
 			fprintf(stderr, "[-] in %s, unable to compare to file: %s\n", __func__, file_path);
 			break;
 		}
-		index_root_do_intersect(ir);
+		fast_index_intersect(fi);
 	}
 
 	return status;
@@ -187,76 +187,76 @@ static int simple_intersect_files(struct simple_index* si, struct gory_sewer_kno
 	return status;
 }
 
-static int index_root_create(struct gory_sewer_knob* gsk_files, size_t index_size, struct index_root** ir_ptr){
-	struct index_root* ir;
+static int index_root_create(struct gory_sewer_knob* gsk_files, size_t index_size, struct fast_index** fi_ptr){
+	struct fast_index* fi;
 	int status;
 	char* first_file_path;
 
-	if ((ir = calloc(sizeof(struct index_root), 1)) == NULL){
+	if ((fi = calloc(sizeof(struct fast_index), 1)) == NULL){
 		fprintf(stderr, "[-] in %s, unable to allocate memory\n", __func__);
 		return ENOMEM;
 	}
-	ir->size = index_size;
+	fi->size = index_size;
 
-	*ir_ptr = ir;
+	*fi_ptr = fi;
 	if ((first_file_path = gory_sewer_first(gsk_files)) == NULL){
 		return 0;
 	}
 
-	if ((status = insert_file(ir, first_file_path)) || (status = root_intersect_files(ir, gsk_files))){
-		index_root_do_clean(ir);
+	if ((status = insert_file(fi, first_file_path)) || (status = fast_intersect_files(fi, gsk_files))){
+		fast_index_clean(fi);
 	}
 
 	return status;
 }
 
-static int index_root_next(struct index_root* ir, struct gory_sewer_knob* gsk_files, struct index_root** ir_next_ptr){
+static int index_root_next(struct fast_index* fi, struct gory_sewer_knob* gsk_files, struct fast_index** fi_next_ptr){
 	uint8_t* value;
-	struct index_root* ir_next;
+	struct fast_index* fi_next;
 	int cont1;
 	int cont2;
 	int status;
 
-	value = alloca(ir->size + 1);
+	value = alloca(fi->size + 1);
 
-	ir_next = *ir_next_ptr;
-	if (ir_next == NULL){
-		ir_next = calloc(sizeof(struct index_root), 1);
-		*ir_next_ptr = ir_next;
+	fi_next = *fi_next_ptr;
+	if (fi_next == NULL){
+		fi_next = calloc(sizeof(struct fast_index), 1);
+		*fi_next_ptr = fi_next;
 	}
 
-	if (ir_next == NULL){
+	if (fi_next == NULL){
 		fprintf(stderr, "[-] in %s, unable to allocate memory\n", __func__);
 		return ENOMEM;
 	}
 
-	ir_next->size = ir->size + 1;
+	fi_next->size = fi->size + 1;
 
-	for (cont1 = index_root_do_get_first(ir, value, 0); cont1; cont1 = index_root_do_get_next(ir, value, 0)){
-		for (cont2 = index_root_do_get_first(ir, value + 1, ir->size - 1); cont2; cont2 = index_root_do_get_next(ir, value + 1, ir->size -1)){
-			if ((status = index_root_do_insert(ir_next, value))){
-				index_root_do_clean(ir_next);
+	for (cont1 = fast_index_get_first(fi, value, 0); cont1; cont1 = fast_index_get_next(fi, value, 0)){
+		for (cont2 = fast_index_get_first(fi, value + 1, fi->size - 1); cont2; cont2 = fast_index_get_next(fi, value + 1, fi->size -1)){
+			if ((status = fast_index_insert(fi_next, value))){
+				fast_index_clean(fi_next);
 				return status;
 			}
 		}
 	}
 
-	if ((status = root_intersect_files(ir_next, gsk_files))){
-		index_root_do_clean(ir_next);
+	if ((status = fast_intersect_files(fi_next, gsk_files))){
+		fast_index_clean(fi_next);
 		return status;
 	}
 
-	for (cont1 = index_root_do_get_first(ir_next, value, 0); cont1; cont1 = index_root_do_get_next(ir_next, value, 0)){
-		index_root_do_compare(ir, value);
-		index_root_do_compare(ir, value + 1);
+	for (cont1 = fast_index_get_first(fi_next, value, 0); cont1; cont1 = fast_index_get_next(fi_next, value, 0)){
+		fast_index_compare(fi, value);
+		fast_index_compare(fi, value + 1);
 	}
 
-	index_root_do_exclude(ir);
+	fast_index_exclude(fi);
 
 	return 0;
 }
 
-static int index_root_next_mix(struct index_root* ir, struct gory_sewer_knob* gsk_files, struct simple_index** si_next_ptr){
+static int index_root_next_mix(struct fast_index* fi, struct gory_sewer_knob* gsk_files, struct simple_index** si_next_ptr){
 	uint8_t* value;
 	uint64_t iter;
 	struct simple_index* si_next;
@@ -264,21 +264,21 @@ static int index_root_next_mix(struct index_root* ir, struct gory_sewer_knob* gs
 	int cont2;
 	int status;
 
-	value = alloca(ir->size + 1);
+	value = alloca(fi->size + 1);
 
 	si_next = *si_next_ptr;
 	if (si_next == NULL){
-		if ((status = simple_index_create(&si_next, ir->size + 1))){
+		if ((status = simple_index_create(&si_next, fi->size + 1))){
 			fprintf(stderr, "[-] in %s, unable to create simple index\n", __func__);
 			return status;
 		}
 		*si_next_ptr = si_next;
 	}
 
-	si_next->size = ir->size + 1;
+	si_next->size = fi->size + 1;
 
-	for (cont1 = index_root_do_get_first(ir, value, 0); cont1; cont1 = index_root_do_get_next(ir, value, 0)){
-		for (cont2 = index_root_do_get_first(ir, value + 1, ir->size - 1); cont2; cont2 = index_root_do_get_next(ir, value + 1, ir->size -1)){
+	for (cont1 = fast_index_get_first(fi, value, 0); cont1; cont1 = fast_index_get_next(fi, value, 0)){
+		for (cont2 = fast_index_get_first(fi, value + 1, fi->size - 1); cont2; cont2 = fast_index_get_next(fi, value + 1, fi->size -1)){
 			if ((status = simple_index_insert(si_next, value))){
 				return status;
 			}
@@ -290,11 +290,11 @@ static int index_root_next_mix(struct index_root* ir, struct gory_sewer_knob* gs
 	}
 
 	for (iter = 0; simple_index_get(si_next, value, &iter); iter ++){
-		index_root_do_compare(ir, value);
-		index_root_do_compare(ir, value + 1);
+		fast_index_compare(fi, value);
+		fast_index_compare(fi, value + 1);
 	}
 
-	index_root_do_exclude(ir);
+	fast_index_exclude(fi);
 
 	return 0;
 }
@@ -353,7 +353,7 @@ static struct last_index li;
 
 int main(int argc, char** argv){
 	int i;
-	struct index_root* ir_buffer[2] = {NULL, NULL};
+	struct fast_index* fi_buffer[2] = {NULL, NULL};
 	int ir_index = 0;
 	struct simple_index* si_buffer[2] = {NULL, NULL};
 	int si_index = 0;
@@ -398,46 +398,46 @@ int main(int argc, char** argv){
 
 	last_index_init(&li, START);
 
-	if (index_root_create(gsk_in, START, ir_buffer)){
+	if (index_root_create(gsk_in, START, fi_buffer)){
 		fprintf(stderr, "[-] in %s, unable to create index of size %u\n", __func__, START);
 		status = EXIT_FAILURE;
 	}
 	else {
-		nb_pattern = index_root_do_count(ir_buffer[ir_index]);
-		fprintf(stderr, "[+] starting with %lu pattern(s) of size %zu in inc file(s)\n", nb_pattern, ir_buffer[ir_index]->size);
+		nb_pattern = fast_index_count(fi_buffer[ir_index]);
+		fprintf(stderr, "[+] starting with %lu pattern(s) of size %zu in inc file(s)\n", nb_pattern, fi_buffer[ir_index]->size);
 
-		while (nb_pattern && ir_buffer[ir_index]->size <= SIMPLE){
-			if (index_root_next(ir_buffer[ir_index], gsk_in, ir_buffer + ((ir_index + 1) & 0x1))){
-				fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, ir_buffer[ir_index]->size + 1);
+		while (nb_pattern && fi_buffer[ir_index]->size <= SIMPLE){
+			if (index_root_next(fi_buffer[ir_index], gsk_in, fi_buffer + ((ir_index + 1) & 0x1))){
+				fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, fi_buffer[ir_index]->size + 1);
 				status = EXIT_FAILURE;
 				goto exit;
 			}
-			push_root_index(&li, ir_buffer[ir_index]);
-			index_root_do_clean(ir_buffer[ir_index]);
+			push_root_index(&li, fi_buffer[ir_index]);
+			fast_index_clean(fi_buffer[ir_index]);
 
 			ir_index = (ir_index + 1) & 0x1;
-			nb_pattern = index_root_do_count(ir_buffer[ir_index]);
+			nb_pattern = fast_index_count(fi_buffer[ir_index]);
 		}
 
 		if (!nb_pattern){
 			goto exit;
 		}
 
-		if (ir_buffer[ir_index]->size > STOP){
-			push_root_index(&li, ir_buffer[ir_index]);
+		if (fi_buffer[ir_index]->size > STOP){
+			push_root_index(&li, fi_buffer[ir_index]);
 			goto exit;
 		}
 
-		fprintf(stderr, "[+] starting simple with %lu pattern(s) of size %zu in inc file(s)\n", nb_pattern, ir_buffer[ir_index]->size);
+		fprintf(stderr, "[+] starting simple with %lu pattern(s) of size %zu in inc file(s)\n", nb_pattern, fi_buffer[ir_index]->size);
 
-		if (index_root_next_mix(ir_buffer[ir_index], gsk_in, si_buffer)){
-			fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, ir_buffer[ir_index]->size + 1);
+		if (index_root_next_mix(fi_buffer[ir_index], gsk_in, si_buffer)){
+			fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, fi_buffer[ir_index]->size + 1);
 			status = EXIT_FAILURE;
 			goto exit;
 		}
 
-		push_root_index(&li, ir_buffer[ir_index]);
-		index_root_do_clean(ir_buffer[ir_index]);
+		push_root_index(&li, fi_buffer[ir_index]);
+		fast_index_clean(fi_buffer[ir_index]);
 
 		while (simple_index_count(si_buffer[si_index]) && si_buffer[si_index]->size <= STOP){
 			if (index_simple_next(si_buffer[si_index], gsk_in, si_buffer + ((si_index + 1) & 0x1))){
@@ -455,11 +455,11 @@ int main(int argc, char** argv){
 
 	exit:
 
-	if (ir_buffer[0] != NULL){
-		index_root_do_delete(ir_buffer[0]);
+	if (fi_buffer[0] != NULL){
+		fast_index_delete(fi_buffer[0]);
 	}
-	if (ir_buffer[1] != NULL){
-		index_root_do_delete(ir_buffer[1]);
+	if (fi_buffer[1] != NULL){
+		fast_index_delete(fi_buffer[1]);
 	}
 
 	if (si_buffer[0] != NULL){
