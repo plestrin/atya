@@ -8,8 +8,6 @@
 struct last_entry {
 	size_t alloc_size;
 	size_t used_size;
-	uint64_t nb_item;
-	uint8_t* ptr;
 };
 
 struct last_index {
