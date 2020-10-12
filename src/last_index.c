@@ -208,6 +208,21 @@ void last_index_dump(struct last_index* li, FILE* steam){
 	fprintf(stderr, "[+] in %s, %lu patterns dumped\n", __func__, li->nb_item);
 }
 
+void last_index_dump_and_clean(struct last_index* li, FILE* steam){
+	uint32_t i;
+
+	for (i = 0; i < 0x10000; i++){
+		if (li->index[i] != NULL){
+			last_entry_dump(li->index[i], steam);
+			last_entry_delete(li->index[i]);
+			li->index[i] = NULL;
+		}
+	}
+
+	fprintf(stderr, "[+] in %s, %lu patterns dumped\n", __func__, li->nb_item);
+}
+
+
 int last_index_cat(struct last_index* li_dst, struct last_index* li_src){
 	uint32_t i;
 	int status;

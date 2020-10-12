@@ -470,8 +470,7 @@ int main(int argc, char** argv){
 	}
 
 	last_exclude_files(&li, gsk_ex);
-	last_index_dump(&li, stdout);
-	last_index_clean(&li);
+	last_index_dump_and_clean(&li, stdout);
 
 	gory_sewer_delete(gsk_in);
 	gory_sewer_delete(gsk_ex);
