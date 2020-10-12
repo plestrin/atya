@@ -12,8 +12,6 @@ struct fast_index {
 int fast_index_insert(struct fast_index* ir, const uint8_t* value);
 int fast_index_insert_buffer(struct fast_index* ir, const uint8_t* buffer, size_t size);
 
-int fast_index_test(struct fast_index* ir, const uint8_t* value);
-
 uint64_t fast_index_count(struct fast_index* ir);
 
 int fast_index_get_first(struct fast_index* ir, uint8_t* value, size_t mask_size);

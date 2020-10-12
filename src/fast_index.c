@@ -207,29 +207,6 @@ int fast_index_get_next(struct fast_index* fi, uint8_t* value, size_t mask_size)
 	return 0;
 }
 
-static int index_test(void** root, const uint8_t* value, size_t index_size){
-	uint8_t idx = value[0];
-
-	if (index_size > 1){
-		if (root[idx] != NULL){
-			return index_test(root[idx], value + 1, index_size - 1);
-		}
-	}
-
-	return *((uint8_t*)root + (idx >> 2)) & (1 << (2 * (idx & 0x3)));
-}
-
-int fast_index_test(struct fast_index* fi, const uint8_t* value){
-	uint16_t idx;
-
-	idx = *(uint16_t*)value;
-	if (fi->root[idx] != NULL){
-		return index_test(fi->root[idx], value + 2, fi->size - 2);
-	}
-
-	return 0;
-}
-
 static void index_clean(void** root, size_t index_size){
 	uint32_t i;
 
