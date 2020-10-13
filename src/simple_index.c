@@ -119,20 +119,12 @@ int simple_index_create(struct simple_index** si, size_t size){
 }
 
 int simple_index_insert_hash(struct simple_index* si, const uint8_t* value, uint16_t hash){
-	return simple_entry_insert(si->index + hash, value, si->size);
-}
+	int status;
 
-uint64_t simple_index_count(struct simple_index* si){
-	uint64_t cnt;
-	uint32_t i;
-
-	for (i = 0, cnt = 0; i < 0x10000; i++){
-		if (si->index[i] != NULL){
-			cnt += si->index[i]->nb_used;
-		}
+	if (!(status = simple_entry_insert(si->index + hash, value, si->size))){
+		si->nb_item ++;
 	}
-
-	return cnt;
+	return status;
 }
 
 uint64_t simple_index_compare_hash(struct simple_index* si, const uint8_t* value, uint16_t hash){
@@ -205,6 +197,7 @@ uint64_t simple_index_remove(struct simple_index* si, uint8_t sel){
 			}
 		}
 	}
+	si->nb_item = cnt;
 
 	return cnt;
 }
@@ -213,9 +206,8 @@ void simple_index_clean(struct simple_index* si){
 	uint32_t i;
 
 	for (i = 0; i < 0x10000; i++){
-		if (si->index[i] != NULL){
-			free(si->index[i]);
-			si->index[i] = NULL;
-		}
+		free(si->index[i]);
+		si->index[i] = NULL;
 	}
+	si->nb_item = 0;
 }

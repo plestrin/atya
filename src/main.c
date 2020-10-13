@@ -182,6 +182,9 @@ static int simple_intersect_files(struct simple_index* si, struct gory_sewer_kno
 			break;
 		}
 		simple_index_remove_nohit(si);
+		if (!si->nb_item){
+			break;
+		}
 	}
 
 	return status;
@@ -439,18 +442,25 @@ int main(int argc, char** argv){
 		fast_push(&li, fi_buffer[ir_index]);
 		fast_index_clean(fi_buffer[ir_index]);
 
-		while (simple_index_count(si_buffer[si_index]) && si_buffer[si_index]->size <= STOP){
+		for ( ; si_buffer[si_index]->nb_item; si_index = (si_index + 1) & 0x1){
+			if (si_buffer[si_index]->size > STOP){
+				simple_push(&li, si_buffer[si_index]);
+				break;
+			}
+
 			if (simple_next(si_buffer[si_index], gsk_in, si_buffer + ((si_index + 1) & 0x1))){
 				fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, si_buffer[si_index]->size + 1);
 				status = EXIT_FAILURE;
-				goto exit;
+				break;
+			}
+
+			if (!si_buffer[si_index]->nb_item){
+				continue;
 			}
 
 			simple_push(&li, si_buffer[si_index]);
 			simple_index_clean(si_buffer[si_index]);
-			si_index = (si_index + 1) & 0x1;
 		}
-		simple_push(&li, si_buffer[si_index]);
 	}
 
 	exit:

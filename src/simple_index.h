@@ -14,11 +14,13 @@ struct simple_entry {
 
 struct simple_index {
 	size_t size;
+	uint64_t nb_item;
 	struct simple_entry* index[0x10000];
 };
 
 static inline void simple_index_init(struct simple_index* si, size_t size){
 	si->size = size;
+	si->nb_item = 0;
 	memset(&si->index, 0, sizeof si->index);
 }
 
@@ -37,8 +39,6 @@ int simple_index_insert_hash(struct simple_index* si, const uint8_t* value, uint
 static inline int simple_index_insert(struct simple_index* si, const uint8_t* value){
 	return simple_index_insert_hash(si, value, simple_index_hash_init(si, value));
 }
-
-uint64_t simple_index_count(struct simple_index* si);
 
 uint64_t simple_index_compare_hash(struct simple_index* si, const uint8_t* value, uint16_t hash);
 
