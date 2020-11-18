@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <malloc.h>
 #include <string.h>
-#include <errno.h>
 
 #include "gory_sewer.h"
 
@@ -42,14 +41,14 @@ struct gory_sewer_knob* gory_sewer_create(size_t chunk_size){
 	return gsk;
 }
 
-int gory_sewer_push(struct gory_sewer_knob* gsk, const void* ptr, size_t size){
+void* gory_sewer_push(struct gory_sewer_knob* gsk, const void* ptr, size_t size){
 	struct gory_sewer_last* gsl;
 	struct gory_sewer_last* new_gsl;
 	size_t rem_size;
 
 	if (size > gsk->chunk_size + sizeof(void*)){
 		printf("[-] in %s, item size is larger than chunk size\n", __func__);
-		return EINVAL;
+		return NULL;
 	}
 
 	if (gsk->head == NULL){
@@ -63,7 +62,7 @@ int gory_sewer_push(struct gory_sewer_knob* gsk, const void* ptr, size_t size){
 	if (rem_size < size){
 		if ((gsl = malloc(gsk->chunk_size)) == NULL){
 			printf("[-] in %s, unable to allocate memory\n", __func__);
-			return ENOMEM;
+			return NULL;
 		}
 		rem_size = gsk->chunk_size - sizeof(void*);
 		if (gsk->head != NULL){
@@ -76,7 +75,7 @@ int gory_sewer_push(struct gory_sewer_knob* gsk, const void* ptr, size_t size){
 	if (rem_size < sizeof(struct gory_sewer_last)){
 		if ((new_gsl = malloc(gsk->chunk_size)) == NULL){
 			printf("[-] in %s, unable to allocate memory\n", __func__);
-			return ENOMEM;
+			return NULL;
 		}
 		rem_size = gsk->chunk_size;
 	}
@@ -97,7 +96,7 @@ int gory_sewer_push(struct gory_sewer_knob* gsk, const void* ptr, size_t size){
 	new_gsl->next = NULL;
 	new_gsl->rem_size = rem_size - sizeof(void*);
 
-	return 0;
+	return (uint8_t*)gsl + sizeof(void*);
 }
 
 void* gory_sewer_first(struct gory_sewer_knob* gsk){

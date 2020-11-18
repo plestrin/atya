@@ -37,7 +37,12 @@ int list_files(char* path, size_t max_len, struct gory_sewer_knob* gsk){
 
 		close(file);
 
-		return gory_sewer_push(gsk, path, len + 1);
+		if (gory_sewer_push(gsk, path, len + 1) == NULL){
+			fprintf(stderr, "[-] in %s, unable to add path to gory sewer\n", __func__);
+			return -1;
+		}
+
+		return 0;
 	}
 
 	if (S_ISDIR(statbuf.st_mode)){
