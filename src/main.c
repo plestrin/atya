@@ -357,7 +357,7 @@ static struct last_index li;
 int main(int argc, char** argv){
 	int i;
 	struct fast_index* fi_buffer[2] = {NULL, NULL};
-	int ir_index = 0;
+	int fi_index = 0;
 	struct simple_index* si_buffer[2] = {NULL, NULL};
 	int si_index = 0;
 	struct gory_sewer_knob* gsk_in;
@@ -406,41 +406,41 @@ int main(int argc, char** argv){
 		status = EXIT_FAILURE;
 	}
 	else {
-		nb_pattern = fast_index_count(fi_buffer[ir_index]);
-		fprintf(stderr, "[+] starting with %lu pattern(s) of size %zu in inc file(s)\n", nb_pattern, fi_buffer[ir_index]->size);
+		nb_pattern = fast_index_count(fi_buffer[fi_index]);
+		fprintf(stderr, "[+] starting with %lu pattern(s) of size %zu in inc file(s)\n", nb_pattern, fi_buffer[fi_index]->size);
 
-		while (nb_pattern && fi_buffer[ir_index]->size <= SIMPLE){
-			if (fast_next(fi_buffer[ir_index], gsk_in, fi_buffer + ((ir_index + 1) & 0x1))){
-				fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, fi_buffer[ir_index]->size + 1);
+		while (nb_pattern && fi_buffer[fi_index]->size <= SIMPLE){
+			if (fast_next(fi_buffer[fi_index], gsk_in, fi_buffer + ((fi_index + 1) & 0x1))){
+				fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, fi_buffer[fi_index]->size + 1);
 				status = EXIT_FAILURE;
 				goto exit;
 			}
-			fast_push(&li, fi_buffer[ir_index]);
-			fast_index_clean(fi_buffer[ir_index]);
+			fast_push(&li, fi_buffer[fi_index]);
+			fast_index_clean(fi_buffer[fi_index]);
 
-			ir_index = (ir_index + 1) & 0x1;
-			nb_pattern = fast_index_count(fi_buffer[ir_index]);
+			fi_index = (fi_index + 1) & 0x1;
+			nb_pattern = fast_index_count(fi_buffer[fi_index]);
 		}
 
 		if (!nb_pattern){
 			goto exit;
 		}
 
-		if (fi_buffer[ir_index]->size > STOP){
-			fast_push(&li, fi_buffer[ir_index]);
+		if (fi_buffer[fi_index]->size > STOP){
+			fast_push(&li, fi_buffer[fi_index]);
 			goto exit;
 		}
 
-		fprintf(stderr, "[+] starting simple with %lu pattern(s) of size %zu in inc file(s)\n", nb_pattern, fi_buffer[ir_index]->size);
+		fprintf(stderr, "[+] starting simple with %lu pattern(s) of size %zu in inc file(s)\n", nb_pattern, fi_buffer[fi_index]->size);
 
-		if (mixed_next(fi_buffer[ir_index], gsk_in, si_buffer)){
-			fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, fi_buffer[ir_index]->size + 1);
+		if (mixed_next(fi_buffer[fi_index], gsk_in, si_buffer)){
+			fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, fi_buffer[fi_index]->size + 1);
 			status = EXIT_FAILURE;
 			goto exit;
 		}
 
-		fast_push(&li, fi_buffer[ir_index]);
-		fast_index_clean(fi_buffer[ir_index]);
+		fast_push(&li, fi_buffer[fi_index]);
+		fast_index_clean(fi_buffer[fi_index]);
 
 		for ( ; si_buffer[si_index]->nb_item; si_index = (si_index + 1) & 0x1){
 			if (si_buffer[si_index]->size > STOP){
