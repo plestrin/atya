@@ -82,3 +82,56 @@ int list_files(char* path, size_t max_len, struct gory_sewer_knob* gsk){
 
 	return 0;
 }
+
+int load_file(const char* file_name, uint8_t** data_ptr, size_t* size_ptr){
+	int fd;
+	struct stat statbuf;
+	uint8_t* data = NULL;
+	size_t size;
+	ssize_t read_sz;
+	int status = 0;
+
+	if ((fd = open(file_name, O_RDONLY)) == -1){
+		status = errno;
+		fprintf(stderr, "[-] in %s, unable to open \"%s\"\n", __func__, file_name);
+		return status;
+	}
+
+	if (fstat(fd, &statbuf)){
+		status = errno;
+		fprintf(stderr, "[-] in %s, unable to stat file\n", __func__);
+		goto exit;
+	}
+
+	size = statbuf.st_size;
+
+	if ((data = malloc(size)) == NULL){
+		status = ENOMEM;
+		fprintf(stderr, "[-] in %s, unable to allocate memory\n", __func__);
+		goto exit;
+	}
+
+	read_sz = read(fd, data, size);
+	if (read_sz < 0){
+		status = errno;
+		fprintf(stderr, "[-] in %s, error while reading file\n", __func__);
+		goto exit;
+	}
+	if ((size_t)read_sz < size){
+		fprintf(stderr, "[-] in %s, incomplete read\n", __func__);
+		size = read_sz;
+	}
+
+	*data_ptr = data;
+	*size_ptr = size;
+
+	exit:
+
+	close(fd);
+
+	if (status){
+		free(data);
+	}
+
+	return status;
+}

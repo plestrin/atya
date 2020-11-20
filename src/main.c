@@ -8,6 +8,7 @@
 #include "fast_index.h"
 #include "simple_index.h"
 #include "last_index.h"
+#include "abs_storage.h"
 #include "gory_sewer.h"
 #include "utile.h"
 
@@ -130,33 +131,6 @@ static int fast_compare_file(struct fast_index* fi, const char* file_name){
 	return 0;
 }
 
-static int simple_compare_file(struct simple_index* si, const char* file_name){
-	FILE* handle;
-	int status;
-	size_t rd_sz;
-
-	if ((handle = fopen(file_name, "rb")) == NULL){
-		status = errno;
-		fprintf(stderr, "[-] in %s, unable to open file: %s\n", __func__, file_name);
-		return status;
-	}
-
-	rd_sz = fread(chunk, 1, sizeof chunk, handle);
-	for ( ; ; ){
-		simple_index_compare_buffer(si, chunk, rd_sz);
-		memmove(chunk, chunk + rd_sz - si->size + 1, si->size - 1);
-		rd_sz = fread(chunk + si->size - 1, 1, (sizeof chunk) - si->size + 1, handle);
-		if (!rd_sz){
-			break;
-		}
-		rd_sz += si->size - 1;
-	}
-
-	fclose(handle);
-
-	return 0;
-}
-
 static int fast_intersect_files(struct fast_index* fi, struct gory_sewer_knob* gsk_files){
 	char* file_path;
 	int status = 0;
@@ -167,24 +141,6 @@ static int fast_intersect_files(struct fast_index* fi, struct gory_sewer_knob* g
 			break;
 		}
 		fast_index_intersect(fi);
-	}
-
-	return status;
-}
-
-static int simple_intersect_files(struct simple_index* si, struct gory_sewer_knob* gsk_files){
-	char* file_path;
-	int status = 0;
-
-	for (file_path = gory_sewer_first(gsk_files); file_path != NULL; file_path = gory_sewer_next(gsk_files)){
-		if ((status = simple_compare_file(si, file_path))){
-			fprintf(stderr, "[-] in %s, unable to compare to file: %s\n", __func__, file_path);
-			break;
-		}
-		simple_index_remove_nohit(si);
-		if (!si->nb_item){
-			break;
-		}
 	}
 
 	return status;
@@ -259,7 +215,7 @@ static int fast_next(struct fast_index* fi, struct gory_sewer_knob* gsk_files, s
 	return 0;
 }
 
-static int mixed_next(struct fast_index* fi, struct gory_sewer_knob* gsk_files, struct simple_index** si_next_ptr){
+static int mixed_next(struct fast_index* fi, struct abs_storage* as, struct simple_index** si_next_ptr){
 	uint8_t* value;
 	uint64_t iter;
 	struct simple_index* si_next;
@@ -288,7 +244,7 @@ static int mixed_next(struct fast_index* fi, struct gory_sewer_knob* gsk_files, 
 		}
 	}
 
-	if ((status = simple_intersect_files(si_next, gsk_files))){
+	if ((status = abs_storage_simple_intersect(as, si_next))){
 		return status;
 	}
 
@@ -302,7 +258,7 @@ static int mixed_next(struct fast_index* fi, struct gory_sewer_knob* gsk_files, 
 	return 0;
 }
 
-static int simple_next(struct simple_index* si, struct gory_sewer_knob* gsk_files, struct simple_index** si_next_ptr){
+static int simple_next(struct simple_index* si, struct abs_storage* as, struct simple_index** si_next_ptr){
 	uint8_t* value;
 	uint64_t iter1;
 	uint32_t iter2;
@@ -332,7 +288,7 @@ static int simple_next(struct simple_index* si, struct gory_sewer_knob* gsk_file
 		}
 	}
 
-	if ((status = simple_intersect_files(si_next, gsk_files))){
+	if ((status = abs_storage_simple_intersect(as, si_next))){
 		return status;
 	}
 
@@ -348,7 +304,7 @@ static int simple_next(struct simple_index* si, struct gory_sewer_knob* gsk_file
 
 #define START 4
 #define SIMPLE 10
-#define STOP 16384
+#define STOP 512
 
 static char path[4096];
 
@@ -364,6 +320,7 @@ int main(int argc, char** argv){
 	struct gory_sewer_knob* gsk_ex;
 	struct gory_sewer_knob* gsk;
 	uint64_t nb_pattern;
+	struct abs_storage as;
 	int status = EXIT_SUCCESS;
 
 	if (argc < 2){
@@ -433,8 +390,14 @@ int main(int argc, char** argv){
 
 		fprintf(stderr, "[+] starting simple with %lu pattern(s) of size %zu in inc file(s)\n", nb_pattern, fi_buffer[fi_index]->size);
 
-		if (mixed_next(fi_buffer[fi_index], gsk_in, si_buffer)){
+		if (abs_storage_init(&as, gsk_in)){
+			fprintf(stderr, "[-] in %s, unable to initialize abs abs storage\n", __func__);
+			goto exit;
+		}
+
+		if (mixed_next(fi_buffer[fi_index], &as, si_buffer)){
 			fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, fi_buffer[fi_index]->size + 1);
+			abs_storage_clean(&as);
 			status = EXIT_FAILURE;
 			goto exit;
 		}
@@ -448,7 +411,7 @@ int main(int argc, char** argv){
 				break;
 			}
 
-			if (simple_next(si_buffer[si_index], gsk_in, si_buffer + ((si_index + 1) & 0x1))){
+			if (simple_next(si_buffer[si_index], &as, si_buffer + ((si_index + 1) & 0x1))){
 				fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, si_buffer[si_index]->size + 1);
 				status = EXIT_FAILURE;
 				break;
@@ -462,6 +425,8 @@ int main(int argc, char** argv){
 			simple_index_clean(si_buffer[si_index]);
 		}
 	}
+
+	abs_storage_clean(&as);
 
 	exit:
 
