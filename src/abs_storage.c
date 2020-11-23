@@ -11,6 +11,14 @@
 // #define ABS_STORAGE_MAX_SIZE 0x100
 #define ABS_STORAGE_MAX_SIZE 0x1000000
 
+static size_t abs_storage_file_get_mem_size(struct abs_storage_file* asf){
+	if (asf->flags & ABS_STORAGE_FILE_FLAG_SK){
+		return asf->sk.size;
+	}
+
+	return 0;
+}
+
 int abs_storage_init(struct abs_storage* as, struct gory_sewer_knob* gsk_path){
 	char* file_path;
 	uint64_t i;
@@ -24,7 +32,7 @@ int abs_storage_init(struct abs_storage* as, struct gory_sewer_knob* gsk_path){
 	}
 
 	as->nb_file = gsk_path->nb_item;
-	as->data_size = 0;
+	as->size = 0;
 
 	if ((as->asf_buffer = malloc(sizeof(struct abs_storage_file) * gsk_path->nb_item)) == NULL){
 		fprintf(stderr, "[-] in %s, unable to allocate memory\n", __func__);
@@ -177,24 +185,36 @@ static void simple_compare_skim(struct simple_index* si, struct skim* sk){
 
 int abs_storage_simple_intersect(struct abs_storage* as, struct simple_index* si){
 	uint64_t i;
-	int status = 0;
+	uint64_t old_size;
+	uint64_t new_size;
+	int status;
+
+	old_size = as->size;
+	new_size = 0;
 
 	for (i = 0; i < as->nb_file; i ++){
-		if (as->asf_buffer[i].flags & ABS_STORAGE_FILE_FLAG_SK){
-			simple_compare_skim(si, &as->asf_buffer[i].sk);
-		}
-		else {
-			if (as->asf_buffer[i].size <= ABS_STORAGE_MAX_SIZE && (ABS_STORAGE_MAX_SIZE - as->asf_buffer[i].size) >= as->data_size && !simple_compare_file_and_init_skim(si, as->asf_buffer[i].path, &as->asf_buffer[i].sk)){
-				as->asf_buffer[i].flags |= ABS_STORAGE_FILE_FLAG_SK;
-				as->data_size += as->asf_buffer[i].sk.size;
+		do {
+			if (as->asf_buffer[i].flags & ABS_STORAGE_FILE_FLAG_SK){
+				simple_compare_skim(si, &as->asf_buffer[i].sk);
+				continue;
 			}
-			else {
-				if ((status = simple_compare_file(si, as->asf_buffer[i].path))){
-					fprintf(stderr, "[-] in %s, unable to compare to file: %s\n", __func__, as->asf_buffer[i].path);
-					break;
+
+			if (as->asf_buffer[i].size <= ABS_STORAGE_MAX_SIZE && (ABS_STORAGE_MAX_SIZE - as->asf_buffer[i].size) >= old_size){
+				if (!simple_compare_file_and_init_skim(si, as->asf_buffer[i].path, &as->asf_buffer[i].sk)){
+					as->asf_buffer[i].flags |= ABS_STORAGE_FILE_FLAG_SK;
+					old_size += as->asf_buffer[i].sk.size;
+					continue;
 				}
+				fprintf(stderr, "[-] in %s, unable to compare file and init skim\n", __func__);
 			}
-		}
+
+			if ((status = simple_compare_file(si, as->asf_buffer[i].path))){
+				fprintf(stderr, "[-] in %s, unable to compare to file: %s\n", __func__, as->asf_buffer[i].path);
+				return status;
+			}
+		} while (0);
+
+		new_size += abs_storage_file_get_mem_size(as->asf_buffer + i);
 
 		simple_index_remove_nohit(si);
 		if (!si->nb_item){
@@ -202,7 +222,9 @@ int abs_storage_simple_intersect(struct abs_storage* as, struct simple_index* si
 		}
 	}
 
-	return status;
+	as->size = new_size;
+
+	return 0;
 }
 
 void abs_storage_clean(struct abs_storage* as){

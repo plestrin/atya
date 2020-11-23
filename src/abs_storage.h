@@ -19,7 +19,7 @@ struct abs_storage_file {
 struct abs_storage {
 	struct gory_sewer_knob* gsk_path;
 	uint64_t nb_file;
-	uint64_t data_size;
+	uint64_t size;
 	struct abs_storage_file* asf_buffer;
 };
 
