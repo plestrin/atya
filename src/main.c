@@ -354,7 +354,7 @@ int main(int argc, char** argv){
 		}
 	}
 
-	fprintf(stderr, "[+] in %s, parsing command line: %lu inc file(s), %lu exc files(s)\n", __func__, gsk_in->nb_item, gsk_ex->nb_item);
+	fprintf(stderr, "[+] in %s, parsing command line: %lu include file(s), %lu exclude files(s)\n", __func__, gsk_in->nb_item, gsk_ex->nb_item);
 
 	last_index_init(&li, START);
 

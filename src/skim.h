@@ -2,36 +2,37 @@
 #define SKIM_H
 
 #include "simple_set.h"
-#include "gory_sewer.h"
 
 struct skim {
 	struct simple_set ss_index;
-	struct gory_sewer_knob* gsk_data;
-	size_t data_size; /* size of the data stored in the structure, not the memory consumption of this structure, not affected by shrink */
+	uint8_t* data;
+	size_t size;
 };
 
-int skim_init(struct skim* sk);
+void skim_init(struct skim* sk, uint8_t* data, size_t size);
 
-int skim_add_data(struct skim* sk, const uint8_t* data, size_t size);
+int skim_add_data(struct skim* sk, size_t off, size_t size);
 
 struct skim_iter {
 	struct simple_set_iter ssi;
+	struct skim* sk;
 };
 
-#define SKIM_ITER_INIT(sk) {.ssi = SIMPLE_SET_ITER_INIT_FIRST(&(sk)->ss_index)}
+#define SKIM_ITER_INIT(sk_) {.ssi = SIMPLE_SET_ITER_INIT_FIRST(&(sk_)->ss_index), .sk = (sk_)}
 
-static inline void skim_iter_init(struct skim_iter* si, struct skim* sk){
-	simple_set_iter_init_first(&si->ssi, &sk->ss_index);
+static inline void skim_iter_init(struct skim_iter* ski, struct skim* sk){
+	simple_set_iter_init_first(&ski->ssi, &sk->ss_index);
+	ski->sk = sk;
 }
 
-static inline void skim_iter_next(struct skim_iter* si){
-	simple_set_iter_next(&si->ssi);
+static inline void skim_iter_next(struct skim_iter* ski){
+	simple_set_iter_next(&ski->ssi);
 }
 
-int skim_iter_get(struct skim_iter* si, uint8_t** data_ptr, size_t* size_ptr);
+int skim_iter_get(struct skim_iter* ski, uint8_t** data_ptr, size_t* size_ptr);
 
-void skim_delete_data(struct skim* sk, struct skim_iter* si);
-void skim_shrink_data(struct skim_iter* si, size_t off_sta, size_t off_sto);
+void skim_delete_data(struct skim_iter* ski);
+void skim_shrink_data(struct skim_iter* ski, size_t off_sta, size_t off_sto);
 
 void skim_clean(struct skim* sk);
 void skim_delete(struct skim* sk);

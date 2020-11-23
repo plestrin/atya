@@ -82,7 +82,7 @@ static int simple_compare_file(struct simple_index* si, const char* file_name){
 }
 
 static int simple_compare_file_and_init_skim(struct simple_index* si, const char* file_name, struct skim* sk){
-	uint8_t* data = NULL;
+	uint8_t* data;
 	size_t size;
 	int status;
 
@@ -93,11 +93,7 @@ static int simple_compare_file_and_init_skim(struct simple_index* si, const char
 		return status;
 	}
 
-	if (skim_init(sk)){
-		fprintf(stderr, "[-] in %s, unable to init skim\n", __func__);
-		free(data);
-		return ENOMEM;
-	}
+	skim_init(sk, data, size);
 
 	if (size >= si->size){
 		uint64_t match;
@@ -125,7 +121,7 @@ static int simple_compare_file_and_init_skim(struct simple_index* si, const char
 					uoff = i;
 				}
 				if (moff != uoff){
-					if (skim_add_data(sk, data + moff, uoff - moff + si->size)){
+					if (skim_add_data(sk, moff, uoff - moff + si->size)){
 						fprintf(stderr, "[-] in %s, unable to add 0x%zx byte(s) to skim structure\n", __func__, uoff - moff + si->size);
 					}
 					moff_set = 0;
@@ -133,10 +129,6 @@ static int simple_compare_file_and_init_skim(struct simple_index* si, const char
 			}
 		}
 	}
-
-	free(data);
-
-	fprintf(stderr, "[+] result of skimming: 0x%lx / 0x%zx\n", sk->data_size, size);
 
 	return 0;
 }
@@ -148,17 +140,36 @@ static void simple_compare_skim(struct simple_index* si, struct skim* sk){
 	size_t i;
 	uint16_t hash;
 
-
 	for (; !skim_iter_get(&ski, &data, &size); ){
+		size_t min;
+		size_t max;
+
 		if (size < si->size){
-			skim_delete_data(sk, &ski);
+			skim_delete_data(&ski);
 			continue;
 		}
 
-		/* TODO : improve */
+		min = size - 1;
+		max = 0;
+
 		for (i = 0, hash = simple_index_hash_init(si, data); i <= size - si->size; hash = simple_index_hash_update(si, hash, data[i], data[i + si->size - 1]), i++){
-			simple_index_compare_hash(si, data + i, hash);
+			if (simple_index_compare_hash(si, data + i, hash)){
+				if (i < min){
+					min = i;
+				}
+				if (i > max){
+					max = i;
+				}
+			}
 		}
+
+		if (max <= min){
+			skim_delete_data(&ski);
+			continue;
+		}
+
+		// attention a completer
+		skim_shrink_data(&ski, min, 0);
 
 		skim_iter_next(&ski);
 	}
@@ -175,7 +186,7 @@ int abs_storage_simple_intersect(struct abs_storage* as, struct simple_index* si
 		else {
 			if (as->asf_buffer[i].size <= ABS_STORAGE_MAX_SIZE && (ABS_STORAGE_MAX_SIZE - as->asf_buffer[i].size) >= as->data_size && !simple_compare_file_and_init_skim(si, as->asf_buffer[i].path, &as->asf_buffer[i].sk)){
 				as->asf_buffer[i].flags |= ABS_STORAGE_FILE_FLAG_SK;
-				as->data_size += as->asf_buffer[i].sk.data_size;
+				as->data_size += as->asf_buffer[i].sk.size;
 			}
 			else {
 				if ((status = simple_compare_file(si, as->asf_buffer[i].path))){
