@@ -19,6 +19,34 @@ static size_t abs_storage_file_get_mem_size(struct abs_storage_file* asf){
 	return 0;
 }
 
+static int abs_storage_init_skimming(struct abs_storage_file* asf){
+	uint8_t* data;
+	size_t size;
+	int status;
+
+	if (asf->flags & ABS_STORAGE_FILE_FLAG_SK){
+		fprintf(stderr, "[-] in %s, skimming has already been initialized for this file\n", __func__);
+		return 0;
+	}
+
+	if ((status = load_file(asf->path, &data, &size))){
+		fprintf(stderr, "[-] in %s, unable to load file\n", __func__);
+		return status;
+	}
+
+	if ((status = skim_init(&asf->sk, data, size))){
+		fprintf(stderr, "[-] in %s, unable to initialized skim\n", __func__);
+		free(data);
+		return status;
+	}
+
+	asf->flags |= ABS_STORAGE_FILE_FLAG_SK;
+
+	fprintf(stderr, "[+] skimming is active for file: %s\n", asf->path);
+
+	return 0;
+}
+
 int abs_storage_init(struct abs_storage* as, struct gory_sewer_knob* gsk_path){
 	char* file_path;
 	uint64_t i;
@@ -89,95 +117,55 @@ static int simple_compare_file(struct simple_index* si, const char* file_name){
 	return 0;
 }
 
-static int simple_compare_file_and_init_skim(struct simple_index* si, const char* file_name, struct skim* sk){
-	uint8_t* data;
-	size_t size;
-	int status;
-
-	fprintf(stderr, "[+] skimming file: %s\n", file_name);
-
-	if ((status = load_file(file_name, &data, &size))){
-		fprintf(stderr, "[-] in %s, unable to load file\n", __func__);
-		return status;
-	}
-
-	skim_init(sk, data, size);
-
-	if (size >= si->size){
-		uint64_t match;
-		size_t i;
-		uint16_t hash;
-		size_t moff = 0;
-		int moff_set = 0;
-
-		for (i = 0, hash = simple_index_hash_init(si, data); i <= size - si->size; hash = simple_index_hash_update(si, hash, data[i], data[i + si->size - 1]), i++){
-			match = simple_index_compare_hash(si, data + i, hash);
-			if (match){
-				if (!moff_set){
-					moff = i;
-					moff_set = 1;
-				}
-			}
-
-			if (moff_set){
-				size_t uoff = moff;
-
-				if (!match){
-					uoff = i - 1;
-				}
-				if (i >= size - si->size){
-					uoff = i;
-				}
-				if (moff != uoff){
-					if (skim_add_data(sk, moff, uoff - moff + si->size)){
-						fprintf(stderr, "[-] in %s, unable to add 0x%zx byte(s) to skim structure\n", __func__, uoff - moff + si->size);
-					}
-					moff_set = 0;
-				}
-			}
-		}
-	}
-
-	return 0;
-}
-
 static void simple_compare_skim(struct simple_index* si, struct skim* sk){
 	struct skim_iter ski = SKIM_ITER_INIT(sk);
 	uint8_t* data;
+	size_t off;
 	size_t size;
 	size_t i;
 	uint16_t hash;
+	int matched;
+	size_t start;
 
-	for (; !skim_iter_get(&ski, &data, &size); ){
-		size_t min;
-		size_t max;
-
+	for (; !skim_iter_get(&ski, &off, &size); ){
 		if (size < si->size){
 			skim_delete_data(&ski);
 			continue;
 		}
 
-		min = size - 1;
-		max = 0;
+		data = sk->data + off;
 
-		for (i = 0, hash = simple_index_hash_init(si, data); i <= size - si->size; hash = simple_index_hash_update(si, hash, data[i], data[i + si->size - 1]), i++){
+		for (i = 0, hash = simple_index_hash_init(si, data), matched = 0; i <= size - si->size; hash = simple_index_hash_update(si, hash, data[i], data[i + si->size - 1]), i++){
 			if (simple_index_compare_hash(si, data + i, hash)){
-				if (i < min){
-					min = i;
+				if (!matched){
+					start = i;
+					matched = 1;
 				}
-				if (i > max){
-					max = i;
+			}
+			else if (matched){
+				if (start + 1 == i){
+					matched = 0;
+				}
+				else {
+					if (i + 1 <= size - si->size){
+						if (skim_add_data(sk, off + i + 1, size - (i + 1))){
+							fprintf(stderr, "[-] in %s, unable to add data to skim. Results may be incorrect\n", __func__);
+						}
+					}
+
+					break;
 				}
 			}
 		}
 
-		if (max <= min){
+		if (!matched){
 			skim_delete_data(&ski);
 			continue;
 		}
 
-		// attention a completer
-		skim_shrink_data(&ski, min, 0);
+		if (skim_resize_data(&ski, off + start, i - start + si->size - 1)){
+			fprintf(stderr, "[-] in %s, unable to resize data in skim\n", __func__);
+		}
 
 		skim_iter_next(&ski);
 	}
@@ -193,32 +181,29 @@ int abs_storage_simple_intersect(struct abs_storage* as, struct simple_index* si
 	new_size = 0;
 
 	for (i = 0; i < as->nb_file; i ++){
-		do {
-			if (as->asf_buffer[i].flags & ABS_STORAGE_FILE_FLAG_SK){
-				simple_compare_skim(si, &as->asf_buffer[i].sk);
-				continue;
-			}
-
+		if (!(as->asf_buffer[i].flags & ABS_STORAGE_FILE_FLAG_SK)){
 			if (as->asf_buffer[i].size <= ABS_STORAGE_MAX_SIZE && (ABS_STORAGE_MAX_SIZE - as->asf_buffer[i].size) >= old_size){
-				if (!simple_compare_file_and_init_skim(si, as->asf_buffer[i].path, &as->asf_buffer[i].sk)){
-					as->asf_buffer[i].flags |= ABS_STORAGE_FILE_FLAG_SK;
+				if (!abs_storage_init_skimming(as->asf_buffer + i)){
 					old_size += as->asf_buffer[i].sk.size;
-					continue;
 				}
-				fprintf(stderr, "[-] in %s, unable to compare file and init skim\n", __func__);
 			}
+		}
 
-			if ((status = simple_compare_file(si, as->asf_buffer[i].path))){
-				fprintf(stderr, "[-] in %s, unable to compare to file: %s\n", __func__, as->asf_buffer[i].path);
-				return status;
-			}
-		} while (0);
+		if (as->asf_buffer[i].flags & ABS_STORAGE_FILE_FLAG_SK){
+			simple_compare_skim(si, &as->asf_buffer[i].sk);
+		}
+		else if ((status = simple_compare_file(si, as->asf_buffer[i].path))){
+			fprintf(stderr, "[-] in %s, unable to compare to file: %s\n", __func__, as->asf_buffer[i].path);
+			return status;
+		}
 
 		new_size += abs_storage_file_get_mem_size(as->asf_buffer + i);
 
 		simple_index_remove_nohit(si);
+
 		if (!si->nb_item){
-			break;
+			as->size = old_size;
+			return 0;
 		}
 	}
 

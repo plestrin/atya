@@ -9,7 +9,7 @@ struct skim {
 	size_t size;
 };
 
-void skim_init(struct skim* sk, uint8_t* data, size_t size);
+int skim_init(struct skim* sk, uint8_t* data, size_t size);
 
 int skim_add_data(struct skim* sk, size_t off, size_t size);
 
@@ -29,10 +29,14 @@ static inline void skim_iter_next(struct skim_iter* ski){
 	simple_set_iter_next(&ski->ssi);
 }
 
-int skim_iter_get(struct skim_iter* ski, uint8_t** data_ptr, size_t* size_ptr);
+int skim_iter_get(struct skim_iter* ski, size_t* off_ptr, size_t* size_ptr);
 
-void skim_delete_data(struct skim_iter* ski);
-void skim_shrink_data(struct skim_iter* ski, size_t off_sta, size_t off_sto);
+int skim_resize_data(struct skim_iter* ski, size_t new_off, size_t new_size);
+
+static inline void skim_delete_data(struct skim_iter* ski){
+	simple_set_delete_item(&ski->sk->ss_index, &ski->ssi);
+}
+
 
 void skim_clean(struct skim* sk);
 void skim_delete(struct skim* sk);
