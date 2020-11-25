@@ -307,7 +307,7 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 }
 
 #define START 4
-#define SIMPLE 10
+#define SIMPLE 8
 #define STOP 512
 
 static char path[4096];
@@ -370,7 +370,7 @@ int main(int argc, char** argv){
 		nb_pattern = fast_index_count(fi_buffer[fi_index]);
 		fprintf(stderr, "[+] starting with %lu pattern(s) of size %zu in inc file(s)\n", nb_pattern, fi_buffer[fi_index]->size);
 
-		while (nb_pattern && fi_buffer[fi_index]->size <= SIMPLE){
+		while (nb_pattern && fi_buffer[fi_index]->size < SIMPLE){
 			if (fast_next(fi_buffer[fi_index], gsk_in, fi_buffer + ((fi_index + 1) & 0x1))){
 				fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, fi_buffer[fi_index]->size + 1);
 				status = EXIT_FAILURE;
