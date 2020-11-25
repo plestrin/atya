@@ -62,22 +62,23 @@ static uint64_t simple_entry_compare(struct simple_entry* se, const uint8_t* val
 static uint32_t simple_entry_remove(struct simple_entry* se, size_t size, uint8_t sel){
 	uint32_t i;
 	uint32_t j;
-	uint8_t* item_src;
-	uint8_t* item_dst;
+	uint8_t* item_i;
+	uint8_t* item_j;
 
-	for (i = 0, j = 0; i < se->nb_used; i++){
-		item_src = simple_entry_get_item(se, i, size);
-		if (item_src[0] != sel){
-			item_dst = simple_entry_get_item(se, j, size);
-			item_dst[0] = 0;
-			if (i != j){
-				memcpy(item_dst + 1, item_src + 1, size);
+	for (i = 0, j = se->nb_used; i < se->nb_used; i++){
+		item_i = simple_entry_get_item(se, i, size);
+		if (item_i[0] == sel){
+			for (j--; j > i; j--){
+				item_j = simple_entry_get_item(se, j, size);
+				if (item_j[0] != sel){
+					memcpy(item_i + 1, item_j + 1, size);
+					break;
+				}
 			}
-			j ++;
+			se->nb_used = j;
 		}
+		item_i[0] = 0;
 	}
-
-	se->nb_used = j;
 
 	return j;
 }

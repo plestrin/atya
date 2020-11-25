@@ -166,7 +166,7 @@ static int fast_create(struct gory_sewer_knob* gsk_files, size_t index_size, str
 				break;
 			}
 		}
-		else{
+		else {
 			if ((status = fast_compare_file(fi, file_path))){
 				fprintf(stderr, "[-] in %s, unable to compare file %s to fast index\n", __func__, file_path);
 				break;
