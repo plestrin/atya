@@ -148,7 +148,7 @@ uint64_t simple_index_compare_buffer(struct simple_index* si, const uint8_t* buf
 	cnt = simple_index_compare_hash(si, buffer, hash);
 
 	for (i = 1; i < size - si->size + 1; i++){
-		hash = simple_index_hash_update(si, hash, buffer[i - 1], buffer[i + si->size - 2]);
+		hash = simple_index_hash_next(si, hash, buffer + i - 1);
 		cnt += simple_index_compare_hash(si, buffer + i, hash);
 	}
 

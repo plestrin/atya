@@ -8,7 +8,6 @@
 
 #include "utile.h"
 
-// #define ABS_STORAGE_MAX_SIZE 0x100
 #define ABS_STORAGE_MAX_SIZE 0x1000000
 
 static size_t abs_storage_file_get_mem_size(struct abs_storage_file* asf){
@@ -135,7 +134,7 @@ static void simple_compare_skim(struct simple_index* si, struct skim* sk){
 
 		data = sk->data + off;
 
-		for (i = 0, hash = simple_index_hash_init(si, data), matched = 0; i <= size - si->size; hash = simple_index_hash_update(si, hash, data[i], data[i + si->size - 1]), i++){
+		for (i = 0, hash = simple_index_hash_init(si, data), matched = 0; i <= size - si->size; hash = simple_index_hash_next(si, hash, data + i), i++){
 			if (simple_index_compare_hash(si, data + i, hash)){
 				if (!matched){
 					start = i;

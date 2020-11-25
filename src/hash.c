@@ -22,3 +22,11 @@ uint16_t hash_update(uint16_t hash, uint8_t old, uint8_t new, size_t size){
 	hash ^= rol16(old, (3 * size) & 0xf);
 	return hash ^ new;
 }
+
+uint16_t hash_pop(uint16_t hash, uint8_t old){
+	return rol16(hash ^ old, 13);
+}
+
+uint16_t hash_push(uint16_t hash, uint8_t new){
+	return rol16(hash, 3) ^ new;
+}

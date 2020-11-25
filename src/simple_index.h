@@ -30,8 +30,16 @@ static inline uint16_t simple_index_hash_init(struct simple_index* si, const uin
 	return hash_init(value, si->size - 1);
 }
 
-static inline uint16_t simple_index_hash_update(struct simple_index* si, uint16_t hash, uint8_t old, uint8_t new){
-	return hash_update(hash, old, new, si->size - 1);
+static inline uint16_t simple_index_hash_next(struct simple_index* si, uint16_t hash, const uint8_t* value){
+	return hash_update(hash, value[0], value[si->size - 1], si->size - 1);
+}
+
+static inline uint16_t simple_index_hash_decrease(struct simple_index* si, uint16_t hash, const uint8_t* value){
+	return hash_pop(hash, value[si->size - 2]);
+}
+
+static inline uint16_t simple_index_hash_increase(struct simple_index* si, uint16_t hash, const uint8_t* value){
+	return hash_push(hash, value[si->size - 1]);
 }
 
 int simple_index_insert_hash(struct simple_index* si, const uint8_t* value, uint16_t hash);
@@ -42,25 +50,13 @@ static inline int simple_index_insert(struct simple_index* si, const uint8_t* va
 
 uint64_t simple_index_compare_hash(struct simple_index* si, const uint8_t* value, uint16_t hash);
 
-static inline uint64_t simple_index_compare(struct simple_index* si, const uint8_t* value){
-	return simple_index_compare_hash(si, value, simple_index_hash_init(si, value));
-}
-
 uint64_t simple_index_compare_buffer(struct simple_index* si, const uint8_t* buffer, size_t size);
 
 int simple_index_get(struct simple_index* si, uint8_t* value, uint64_t* iter);
 
-static inline int simple_index_get_next(struct simple_index* si, uint8_t* value, uint64_t* iter){
-	*iter += 1;
-	return simple_index_get(si, value, iter);
-}
+#define simple_index_iter_get_hash(iter) ((iter >> 32) & 0xffff)
 
 int simple_index_get_hash(struct simple_index* si, uint8_t* value, uint16_t hash, uint32_t* iter);
-
-static inline int simple_index_get_hash_next(struct simple_index* si, uint8_t* value, uint16_t hash, uint32_t* iter){
-	*iter += 1;
-	return simple_index_get_hash(si, value, hash, iter);
-}
 
 uint64_t simple_index_remove(struct simple_index* si, uint8_t sel);
 

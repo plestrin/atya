@@ -263,7 +263,8 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 	uint64_t iter1;
 	uint32_t iter2;
 	struct simple_index* si_next;
-	uint16_t hash;
+	uint16_t hash1;
+	uint16_t hash2;
 	int status;
 
 	value = alloca(si->size + 1);
@@ -280,9 +281,10 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 	si_next->size = si->size + 1;
 
 	for (iter1 = 0; simple_index_get(si, value, &iter1); iter1 ++){
-		hash = hash_init(value + 1, si->size - 1);
-		for (iter2 = 0; simple_index_get_hash(si, value + 1, hash, &iter2); iter2 ++){
-			if ((status = simple_index_insert(si_next, value))){
+		hash1 = simple_index_hash_next(si, simple_index_iter_get_hash(iter1), value);
+		for (iter2 = 0; simple_index_get_hash(si, value + 1, hash1, &iter2); iter2 ++){
+			hash2 = simple_index_hash_increase(si, simple_index_iter_get_hash(iter1), value);
+			if ((status = simple_index_insert_hash(si_next, value, hash2))){
 				return status;
 			}
 		}
@@ -293,8 +295,10 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 	}
 
 	for (iter1 = 0; simple_index_get(si_next, value, &iter1); iter1 ++){
-		simple_index_compare(si, value);
-		simple_index_compare(si, value + 1);
+		hash1 = simple_index_hash_decrease(si_next, simple_index_iter_get_hash(iter1), value);
+		simple_index_compare_hash(si, value, hash1);
+		hash1 = simple_index_hash_next(si, hash1, value);
+		simple_index_compare_hash(si, value + 1, hash1);
 	}
 
 	simple_index_remove_hit(si);
