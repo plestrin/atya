@@ -52,7 +52,9 @@ uint64_t simple_index_compare_hash(struct simple_index* si, const uint8_t* value
 
 uint64_t simple_index_compare_buffer(struct simple_index* si, const uint8_t* buffer, size_t size);
 
-int simple_index_get(struct simple_index* si, uint8_t* value, uint64_t* iter);
+int simple_index_get(struct simple_index* si, const uint8_t** value_ptr, uint64_t* iter);
+
+int simple_index_get_cpy(struct simple_index* si, uint8_t* value, uint64_t* iter);
 
 #define simple_index_iter_get_hash(iter) ((iter >> 32) & 0xffff)
 

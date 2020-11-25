@@ -35,15 +35,13 @@ static int fast_push(struct last_index* li, struct fast_index* fi){
 }
 
 static int simple_push(struct last_index* li, struct simple_index* si){
-	uint8_t* value;
+	const uint8_t* ptr;
 	uint64_t iter;
 	uint64_t cnt;
 	int status;
 
-	value = alloca(si->size);
-
-	for (iter = 0, cnt = 0; simple_index_get(si, value, &iter); iter ++, cnt ++){
-		if ((status = last_index_push(li, value, si->size))){
+	for (iter = 0, cnt = 0; simple_index_get(si, &ptr, &iter); iter ++, cnt ++){
+		if ((status = last_index_push(li, ptr, si->size))){
 			fprintf(stderr, "[-] in %s, unable to push data to last index\n", __func__);
 			return status;
 		}
@@ -137,7 +135,7 @@ static int fast_intersect_files(struct fast_index* fi, struct gory_sewer_knob* g
 
 	for (file_path = gory_sewer_first(gsk_files); file_path != NULL; file_path = gory_sewer_next(gsk_files)){
 		if ((status = fast_compare_file(fi, file_path))){
-			fprintf(stderr, "[-] in %s, unable to compare to file: %s\n", __func__, file_path);
+			fprintf(stderr, "[-] in %s, unable to compare file %s to fast index\n", __func__, file_path);
 			break;
 		}
 		fast_index_intersect(fi);
@@ -148,22 +146,33 @@ static int fast_intersect_files(struct fast_index* fi, struct gory_sewer_knob* g
 
 static int fast_create(struct gory_sewer_knob* gsk_files, size_t index_size, struct fast_index** fi_ptr){
 	struct fast_index* fi;
-	int status;
-	char* first_file_path;
+	char* file_path;
+	int first;
+	int status = 0;
 
 	if ((fi = calloc(sizeof(struct fast_index), 1)) == NULL){
 		fprintf(stderr, "[-] in %s, unable to allocate memory\n", __func__);
 		return ENOMEM;
 	}
+
 	fi->size = index_size;
-
 	*fi_ptr = fi;
-	if ((first_file_path = gory_sewer_first(gsk_files)) == NULL){
-		return 0;
-	}
 
-	if ((status = fast_insert_file(fi, first_file_path)) || (status = fast_intersect_files(fi, gsk_files))){
-		fast_index_clean(fi);
+	for (file_path = gory_sewer_first(gsk_files), first = 1; file_path != NULL; file_path = gory_sewer_next(gsk_files)){
+		if (first){
+			first = 0;
+			if ((status = fast_insert_file(fi, file_path))){
+				fprintf(stderr, "[-] in %s, unable to insert file %s to fast index\n", __func__, file_path);
+				break;
+			}
+		}
+		else{
+			if ((status = fast_compare_file(fi, file_path))){
+				fprintf(stderr, "[-] in %s, unable to compare file %s to fast index\n", __func__, file_path);
+				break;
+			}
+			fast_index_intersect(fi);
+		}
 	}
 
 	return status;
@@ -217,6 +226,7 @@ static int fast_next(struct fast_index* fi, struct gory_sewer_knob* gsk_files, s
 
 static int mixed_next(struct fast_index* fi, struct abs_storage* as, struct simple_index** si_next_ptr){
 	uint8_t* value;
+	const uint8_t* ptr;
 	uint64_t iter;
 	struct simple_index* si_next;
 	int cont1;
@@ -248,9 +258,9 @@ static int mixed_next(struct fast_index* fi, struct abs_storage* as, struct simp
 		return status;
 	}
 
-	for (iter = 0; simple_index_get(si_next, value, &iter); iter ++){
-		fast_index_compare(fi, value);
-		fast_index_compare(fi, value + 1);
+	for (iter = 0; simple_index_get(si_next, &ptr, &iter); iter ++){
+		fast_index_compare(fi, ptr);
+		fast_index_compare(fi, ptr + 1);
 	}
 
 	fast_index_exclude(fi);
@@ -260,6 +270,7 @@ static int mixed_next(struct fast_index* fi, struct abs_storage* as, struct simp
 
 static int simple_next(struct simple_index* si, struct abs_storage* as, struct simple_index** si_next_ptr){
 	uint8_t* value;
+	const uint8_t* ptr;
 	uint64_t iter1;
 	uint32_t iter2;
 	struct simple_index* si_next;
@@ -280,7 +291,7 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 
 	si_next->size = si->size + 1;
 
-	for (iter1 = 0; simple_index_get(si, value, &iter1); iter1 ++){
+	for (iter1 = 0; simple_index_get_cpy(si, value, &iter1); iter1 ++){
 		hash1 = simple_index_hash_next(si, simple_index_iter_get_hash(iter1), value);
 		for (iter2 = 0; simple_index_get_hash(si, value + 1, hash1, &iter2); iter2 ++){
 			hash2 = simple_index_hash_increase(si, simple_index_iter_get_hash(iter1), value);
@@ -294,11 +305,11 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 		return status;
 	}
 
-	for (iter1 = 0; simple_index_get(si_next, value, &iter1); iter1 ++){
-		hash1 = simple_index_hash_decrease(si_next, simple_index_iter_get_hash(iter1), value);
-		simple_index_compare_hash(si, value, hash1);
-		hash1 = simple_index_hash_next(si, hash1, value);
-		simple_index_compare_hash(si, value + 1, hash1);
+	for (iter1 = 0; simple_index_get(si_next, &ptr, &iter1); iter1 ++){
+		hash1 = simple_index_hash_decrease(si_next, simple_index_iter_get_hash(iter1), ptr);
+		simple_index_compare_hash(si, ptr, hash1);
+		hash1 = simple_index_hash_next(si, hash1, ptr);
+		simple_index_compare_hash(si, ptr + 1, hash1);
 	}
 
 	simple_index_remove_hit(si);
@@ -306,30 +317,16 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 	return 0;
 }
 
-#define START 4
-#define SIMPLE 8
-#define STOP 512
-
-static char path[4096];
-
-static struct last_index li;
-
-int main(int argc, char** argv){
-	int i;
-	struct fast_index* fi_buffer[2] = {NULL, NULL};
-	int fi_index = 0;
-	struct simple_index* si_buffer[2] = {NULL, NULL};
-	int si_index = 0;
+static int parse_cmd_line(int argc, char** argv, struct gory_sewer_knob** gsk_in_ptr, struct gory_sewer_knob** gsk_ex_ptr){
+	char path[4096];
 	struct gory_sewer_knob* gsk_in;
 	struct gory_sewer_knob* gsk_ex;
 	struct gory_sewer_knob* gsk;
-	uint64_t nb_pattern;
-	struct abs_storage as;
-	int status = EXIT_SUCCESS;
+	int i;
 
 	if (argc < 2){
 		fprintf(stderr, "[-] usage: file [...] [-e [...]]\n");
-		return EXIT_FAILURE;
+		return -1;
 	}
 
 	gsk_in = gory_sewer_create(0x4000);
@@ -343,7 +340,7 @@ int main(int argc, char** argv){
 		if (gsk_ex != NULL){
 			gory_sewer_delete(gsk_ex);
 		}
-		return EXIT_FAILURE;
+		return -1;
 	}
 
 	for (i = 1, gsk = gsk_in; i < argc; i++){
@@ -358,7 +355,34 @@ int main(int argc, char** argv){
 		}
 	}
 
-	fprintf(stderr, "[+] in %s, parsing command line: %lu include file(s), %lu exclude files(s)\n", __func__, gsk_in->nb_item, gsk_ex->nb_item);
+	*gsk_in_ptr = gsk_in;
+	*gsk_ex_ptr = gsk_ex;
+
+	fprintf(stderr, "[+] command line: %lu include file(s), %lu exclude files(s)\n", gsk_in->nb_item, gsk_ex->nb_item);
+
+	return 0;
+}
+
+#define START 4
+#define SIMPLE 8
+#define STOP 512
+
+static struct last_index li;
+
+int main(int argc, char** argv){
+	struct fast_index* fi_buffer[2] = {NULL, NULL};
+	int fi_index = 0;
+	struct simple_index* si_buffer[2] = {NULL, NULL};
+	int si_index = 0;
+	struct gory_sewer_knob* gsk_in;
+	struct gory_sewer_knob* gsk_ex;
+	uint64_t nb_pattern;
+	struct abs_storage as;
+	int status = EXIT_SUCCESS;
+
+	if (parse_cmd_line(argc, argv, &gsk_in, &gsk_ex)){
+		return EXIT_FAILURE;
+	}
 
 	last_index_init(&li, START);
 

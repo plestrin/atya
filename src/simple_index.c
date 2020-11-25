@@ -82,9 +82,9 @@ static uint32_t simple_entry_remove(struct simple_entry* se, size_t size, uint8_
 	return j;
 }
 
-static int simple_entry_get(struct simple_entry* se, uint8_t* value, uint32_t* idx, size_t size){
+static int simple_entry_get(struct simple_entry* se, const uint8_t** value_ptr, uint32_t* idx, size_t size){
 	if (*idx < se->nb_used){
-		memcpy(value, simple_entry_get_item(se, *idx, size) + 1, size);
+		*value_ptr = simple_entry_get_item(se, *idx, size) + 1;
 		return 1;
 	}
 
@@ -155,7 +155,7 @@ uint64_t simple_index_compare_buffer(struct simple_index* si, const uint8_t* buf
 	return cnt;
 }
 
-int simple_index_get(struct simple_index* si, uint8_t* value, uint64_t* iter){
+int simple_index_get(struct simple_index* si, const uint8_t** value_ptr, uint64_t* iter){
 	uint32_t i;
 	uint32_t j;
 
@@ -163,10 +163,21 @@ int simple_index_get(struct simple_index* si, uint8_t* value, uint64_t* iter){
 		if (si->index[i] == NULL){
 			continue;
 		}
-		if (simple_entry_get(si->index[i], value, &j, si->size)){
+		if (simple_entry_get(si->index[i], value_ptr, &j, si->size)){
 			*iter = j | ((uint64_t)i << 32);
 			return 1;
 		}
+	}
+
+	return 0;
+}
+
+int simple_index_get_cpy(struct simple_index* si, uint8_t* value, uint64_t* iter){
+	const uint8_t* ptr;
+
+	if (simple_index_get(si, &ptr, iter)){
+		memcpy(value, ptr, si->size);
+		return 1;
 	}
 
 	return 0;
