@@ -14,7 +14,6 @@ static inline uint8_t* last_entry_get_data(struct last_entry* le){
 static struct last_entry* last_entry_push(struct last_entry* le, const uint8_t* data, size_t size){
 	size_t new_alloc_size;
 	struct last_entry* new_le;
-	int status;
 	size_t alloc_size = 0;
 	size_t used_size = 0;
 
@@ -38,7 +37,6 @@ static struct last_entry* last_entry_push(struct last_entry* le, const uint8_t* 
 		}
 
 		if ((new_le = realloc(le, new_alloc_size)) == NULL){
-			status = errno;
 			fprintf(stderr, "[-] in %s, unable to realloc memory\n", __func__);
 			return NULL;
 		}
