@@ -7,7 +7,7 @@ all: build atya
 build:
 	mkdir -p build
 
-atya: build/main.o build/gory_sewer.o build/utile.o build/fast_index.o build/simple_index.o build/last_index.o build/hash.o build/abs_storage.o build/skim.o build/simple_set.o build/llist.o
+atya: build/main.o build/gory_sewer.o build/utile.o build/fast_index.o build/simple_index.o build/last_index.o build/hash.o build/abs_storage.o build/skim.o build/simple_set.o build/llist.o build/abs_index.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
 .PHONY: test

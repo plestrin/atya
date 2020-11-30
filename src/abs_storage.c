@@ -89,10 +89,13 @@ int abs_storage_init(struct abs_storage* as, struct gory_sewer_knob* gsk_path){
 
 static uint8_t chunk[0x10000];
 
-static int simple_compare_file(struct simple_index* si, const char* file_name){
+static int compare_file(struct abs_index* ai, const char* file_name){
 	FILE* handle;
 	int status;
 	size_t rd_sz;
+	size_t ol_sz;
+
+	ol_sz = abs_index_get_size(ai) - 1;
 
 	if ((handle = fopen(file_name, "rb")) == NULL){
 		status = errno;
@@ -102,13 +105,13 @@ static int simple_compare_file(struct simple_index* si, const char* file_name){
 
 	rd_sz = fread(chunk, 1, sizeof chunk, handle);
 	for ( ; ; ){
-		simple_index_compare_buffer(si, chunk, rd_sz);
-		memmove(chunk, chunk + rd_sz - si->size + 1, si->size - 1);
-		rd_sz = fread(chunk + si->size - 1, 1, (sizeof chunk) - si->size + 1, handle);
+		abs_index_compare_buffer(ai, chunk, rd_sz);
+		memmove(chunk, chunk + rd_sz - ol_sz, ol_sz);
+		rd_sz = fread(chunk + ol_sz, 1, (sizeof chunk) - ol_sz, handle);
 		if (!rd_sz){
 			break;
 		}
-		rd_sz += si->size - 1;
+		rd_sz += ol_sz;
 	}
 
 	fclose(handle);
@@ -116,26 +119,29 @@ static int simple_compare_file(struct simple_index* si, const char* file_name){
 	return 0;
 }
 
-static void simple_compare_skim(struct simple_index* si, struct skim* sk){
+static void compare_skim(struct abs_index* ai, struct skim* sk){
 	struct skim_iter ski = SKIM_ITER_INIT(sk);
 	uint8_t* data;
 	size_t off;
 	size_t size;
 	size_t i;
-	uint16_t hash;
 	int matched;
 	size_t start;
+	size_t id_sz;
+	uint64_t cmp_res;
+
+	id_sz = abs_index_get_size(ai);
 
 	for (; !skim_iter_get(&ski, &off, &size); ){
-		if (size < si->size){
+		if (size < id_sz){
 			skim_delete_data(&ski);
 			continue;
 		}
 
 		data = sk->data + off;
 
-		for (i = 0, hash = simple_index_hash_init(si, data), matched = 0; i <= size - si->size; hash = simple_index_hash_next(si, hash, data + i), i++){
-			if (simple_index_compare_hash(si, data + i, hash)){
+		for (i = 0, cmp_res = abs_index_compare_init(ai, data), matched = 0; ; cmp_res = abs_index_compare_next(ai, data + i - 1)){
+			if (cmp_res){
 				if (!matched){
 					start = i;
 					matched = 1;
@@ -146,7 +152,7 @@ static void simple_compare_skim(struct simple_index* si, struct skim* sk){
 					matched = 0;
 				}
 				else {
-					if (i + 1 <= size - si->size){
+					if (i + 1 <= size - id_sz){
 						if (skim_add_data(sk, off + i + 1, size - (i + 1))){
 							fprintf(stderr, "[-] in %s, unable to add data to skim. Results may be incorrect\n", __func__);
 						}
@@ -155,6 +161,10 @@ static void simple_compare_skim(struct simple_index* si, struct skim* sk){
 					break;
 				}
 			}
+
+			if (++i > size - id_sz){
+				break;
+			}
 		}
 
 		if (!matched){
@@ -162,7 +172,7 @@ static void simple_compare_skim(struct simple_index* si, struct skim* sk){
 			continue;
 		}
 
-		if (skim_resize_data(&ski, off + start, i - start + si->size - 1)){
+		if (skim_resize_data(&ski, off + start, i - start + id_sz - 1)){
 			fprintf(stderr, "[-] in %s, unable to resize data in skim\n", __func__);
 		}
 
@@ -170,7 +180,7 @@ static void simple_compare_skim(struct simple_index* si, struct skim* sk){
 	}
 }
 
-int abs_storage_simple_intersect(struct abs_storage* as, struct simple_index* si){
+int abs_storage_intersect(struct abs_storage* as, struct abs_index* ai){
 	uint64_t i;
 	uint64_t old_size;
 	uint64_t new_size;
@@ -189,18 +199,16 @@ int abs_storage_simple_intersect(struct abs_storage* as, struct simple_index* si
 		}
 
 		if (as->asf_buffer[i].flags & ABS_STORAGE_FILE_FLAG_SK){
-			simple_compare_skim(si, &as->asf_buffer[i].sk);
+			compare_skim(ai, &as->asf_buffer[i].sk);
 		}
-		else if ((status = simple_compare_file(si, as->asf_buffer[i].path))){
+		else if ((status = compare_file(ai, as->asf_buffer[i].path))){
 			fprintf(stderr, "[-] in %s, unable to compare to file: %s\n", __func__, as->asf_buffer[i].path);
 			return status;
 		}
 
 		new_size += abs_storage_file_get_mem_size(as->asf_buffer + i);
 
-		simple_index_remove_nohit(si);
-
-		if (!si->nb_item){
+		if (!abs_index_remove_nohit(ai)){
 			as->size = old_size;
 			return 0;
 		}

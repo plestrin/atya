@@ -5,7 +5,7 @@
 
 #include "skim.h"
 #include "gory_sewer.h"
-#include "simple_index.h"
+#include "abs_index.h"
 
 #define ABS_STORAGE_FILE_FLAG_SK 1
 
@@ -25,7 +25,7 @@ struct abs_storage {
 
 int abs_storage_init(struct abs_storage* as, struct gory_sewer_knob* gsk_path);
 
-int abs_storage_simple_intersect(struct abs_storage* as, struct simple_index* si);
+int abs_storage_intersect(struct abs_storage* as, struct abs_index* ai);
 
 /* does not clean the GSK */
 void abs_storage_clean(struct abs_storage* as);

@@ -254,7 +254,9 @@ static int mixed_next(struct fast_index* fi, struct abs_storage* as, struct simp
 		}
 	}
 
-	if ((status = abs_storage_simple_intersect(as, si_next))){
+	struct abs_index ai_next;
+	abs_index_init_simple(&ai_next, si_next);
+	if ((status = abs_storage_intersect(as, &ai_next))){
 		return status;
 	}
 
@@ -301,7 +303,9 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 		}
 	}
 
-	if ((status = abs_storage_simple_intersect(as, si_next))){
+	struct abs_index ai_next;
+	abs_index_init_simple(&ai_next, si_next);
+	if ((status = abs_storage_intersect(as, &ai_next))){
 		return status;
 	}
 
