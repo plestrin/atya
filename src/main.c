@@ -138,7 +138,7 @@ static int fast_intersect_files(struct fast_index* fi, struct gory_sewer_knob* g
 			fprintf(stderr, "[-] in %s, unable to compare file %s to fast index\n", __func__, file_path);
 			break;
 		}
-		fast_index_intersect(fi);
+		fast_index_remove_nohit(fi);
 	}
 
 	return status;
@@ -171,7 +171,7 @@ static int fast_create(struct gory_sewer_knob* gsk_files, size_t index_size, str
 				fprintf(stderr, "[-] in %s, unable to compare file %s to fast index\n", __func__, file_path);
 				break;
 			}
-			fast_index_intersect(fi);
+			fast_index_remove_nohit(fi);
 		}
 	}
 
@@ -219,7 +219,7 @@ static int fast_next(struct fast_index* fi, struct gory_sewer_knob* gsk_files, s
 		fast_index_compare(fi, value + 1);
 	}
 
-	fast_index_exclude(fi);
+	fast_index_remove_hit(fi);
 
 	return 0;
 }
@@ -265,7 +265,7 @@ static int mixed_next(struct fast_index* fi, struct abs_storage* as, struct simp
 		fast_index_compare(fi, ptr + 1);
 	}
 
-	fast_index_exclude(fi);
+	fast_index_remove_hit(fi);
 
 	return 0;
 }

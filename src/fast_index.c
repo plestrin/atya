@@ -65,41 +65,50 @@ int fast_index_insert_buffer(struct fast_index* fi, const uint8_t* buffer, size_
 	return status;
 }
 
-static void index_compare(void** root, const uint8_t* value, size_t index_size){
+static uint64_t index_compare(void** root, const uint8_t* value, size_t index_size){
 	uint8_t idx;
 	uint8_t* leaf;
+	uint64_t res = 0;
 
 	idx = value[0];
 	if (index_size > 1){
 		if (root[idx] != NULL){
-			index_compare(root[idx], value + 1, index_size - 1);
+			res = index_compare(root[idx], value + 1, index_size - 1);
 		}
 	}
 	else {
 		leaf = (uint8_t*)root;
+		res = (leaf[idx >> 2] >> (2 * (idx & 0x3))) & 0x1;
 		leaf[idx >> 2] |= 1 << (2 * (idx & 0x3) + 1);
 	}
+
+	return res;
 }
 
-void fast_index_compare(struct fast_index* fi, const uint8_t* value){
+uint64_t fast_index_compare(struct fast_index* fi, const uint8_t* value){
 	uint16_t idx;
 
 	idx = *(uint16_t*)value;
 	if (fi->root[idx] != NULL){
-		index_compare(fi->root[idx], value + 2, fi->size - 2);
+		return index_compare(fi->root[idx], value + 2, fi->size - 2);
 	}
+
+	return 0;
 }
 
-void fast_index_compare_buffer(struct fast_index* fi, const uint8_t* buffer, size_t size){
+uint64_t fast_index_compare_buffer(struct fast_index* fi, const uint8_t* buffer, size_t size){
 	size_t i;
+	uint64_t cnt;
 
 	if (size < fi->size){
-		return;
+		return 0;
 	}
 
-	for (i = 0; i < size - fi->size + 1; i++){
-		fast_index_compare(fi, buffer + i);
+	for (i = 0, cnt = 0; i < size - fi->size + 1; i++){
+		cnt += fast_index_compare(fi, buffer + i);
 	}
+
+	return cnt;
 }
 
 static int index_get_first(void** root, size_t index_size, uint8_t* value, size_t mask_size){
@@ -273,19 +282,22 @@ uint64_t fast_index_count(struct fast_index* fi){
 	return cnt;
 }
 
-static int index_intersect(void** root, size_t index_size){
+static uint64_t index_remove(void** root, size_t index_size, uint64_t sel){
 	uint32_t i;
-	uint64_t nb_valid;
+	uint64_t cnt;
 
 	if (index_size > 1){
-		for (i = 0, nb_valid = 0; i < 0x100; i++){
+		uint64_t local_cnt;
+
+		for (i = 0, cnt = 0; i < 0x100; i++){
 			if (root[i] != NULL){
-				if (index_intersect(root[i], index_size - 1)){
+				local_cnt = index_remove(root[i], index_size - 1, sel);
+				if (!local_cnt){
 					free(root[i]);
 					root[i] = NULL;
 				}
 				else {
-					nb_valid ++;
+					cnt += local_cnt;
 				}
 			}
 		}
@@ -293,78 +305,32 @@ static int index_intersect(void** root, size_t index_size){
 	else {
 		uint64_t* leaf = (uint64_t*)root;
 
-		for (i = 0, nb_valid = 0; i < 8; i++){
-			leaf[i] &= (leaf[i] >> 1) & 0x5555555555555555;
-			nb_valid += __builtin_popcountll(leaf[i]);
+		for (i = 0, cnt = 0; i < 8; i++){
+			leaf[i] &= ((leaf[i] >> 1) & 0x5555555555555555) ^ sel;
+			cnt += __builtin_popcountll(leaf[i]);
 		}
 	}
 
-	return !nb_valid;
+	return cnt;
 }
 
-int fast_index_intersect(struct fast_index* fi){
+uint64_t fast_index_remove(struct fast_index* fi, uint64_t sel){
 	uint32_t i;
-	uint32_t nb_valid;
+	uint64_t local_cnt;
+	uint64_t cnt;
 
-	for (i = 0, nb_valid = 0; i < 0x10000; i++){
+	for (i = 0, cnt = 0; i < 0x10000; i++){
 		if (fi->root[i] != NULL){
-			if (index_intersect(fi->root[i], fi->size - 2)){
+			local_cnt = index_remove(fi->root[i], fi->size - 2, sel);
+			if (!local_cnt){
 				free(fi->root[i]);
 				fi->root[i] = NULL;
 			}
 			else {
-				nb_valid ++;
+				cnt += local_cnt;
 			}
 		}
 	}
 
-	return !nb_valid;
-}
-
-static int index_exclude(void** root, size_t index_size){
-	uint32_t i;
-	uint64_t nb_valid;
-
-	if (index_size > 1){
-		for (i = 0, nb_valid = 0; i < 0x100; i++){
-			if (root[i] != NULL){
-				if (index_exclude(root[i], index_size - 1)){
-					free(root[i]);
-					root[i] = NULL;
-				}
-				else {
-					nb_valid ++;
-				}
-			}
-		}
-	}
-	else {
-		uint64_t* leaf = (uint64_t*)root;
-
-		for (i = 0, nb_valid = 0; i < 8; i++){
-			leaf[i] = (leaf[i] & (~(leaf[i] >> 1))) & 0x5555555555555555;
-			nb_valid += __builtin_popcountll(leaf[i]);
-		}
-	}
-
-	return !nb_valid;
-}
-
-int fast_index_exclude(struct fast_index* fi){
-	uint32_t i;
-	uint32_t nb_valid;
-
-	for (i = 0, nb_valid = 0; i < 0x10000; i++){
-		if (fi->root[i] != NULL){
-			if (index_exclude(fi->root[i], fi->size - 2)){
-				free(fi->root[i]);
-				fi->root[i] = NULL;
-			}
-			else {
-				nb_valid ++;
-			}
-		}
-	}
-
-	return !nb_valid;
+	return cnt;
 }
