@@ -311,6 +311,15 @@ static int parse_cmd_line(int argc, char** argv, struct gory_sewer_knob** gsk_in
 		}
 	}
 
+	if (gsk_in->nb_item < 2){
+		fprintf(stderr, "[-] in %s, too few include files\n", __func__);
+
+		gory_sewer_delete(gsk_in);
+		gory_sewer_delete(gsk_ex);
+
+		return -1;
+	}
+
 	*gsk_in_ptr = gsk_in;
 	*gsk_ex_ptr = gsk_ex;
 
