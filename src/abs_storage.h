@@ -25,7 +25,7 @@ struct abs_storage {
 
 int abs_storage_init(struct abs_storage* as, struct gory_sewer_knob* gsk_path);
 
-int abs_storage_intersect(struct abs_storage* as, struct abs_index* ai);
+int abs_storage_intersect(struct abs_storage* as, struct abs_index* ai, uint64_t offset);
 
 /* does not clean the GSK */
 void abs_storage_clean(struct abs_storage* as);

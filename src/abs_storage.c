@@ -180,7 +180,7 @@ static void compare_skim(struct abs_index* ai, struct skim* sk){
 	}
 }
 
-int abs_storage_intersect(struct abs_storage* as, struct abs_index* ai){
+int abs_storage_intersect(struct abs_storage* as, struct abs_index* ai, uint64_t offset){
 	uint64_t i;
 	uint64_t old_size;
 	uint64_t new_size;
@@ -189,7 +189,7 @@ int abs_storage_intersect(struct abs_storage* as, struct abs_index* ai){
 	old_size = as->size;
 	new_size = 0;
 
-	for (i = 0; i < as->nb_file; i ++){
+	for (i = offset; i < as->nb_file; i ++){
 		if (!(as->asf_buffer[i].flags & ABS_STORAGE_FILE_FLAG_SK)){
 			if (as->asf_buffer[i].size <= ABS_STORAGE_MAX_SIZE && (ABS_STORAGE_MAX_SIZE - as->asf_buffer[i].size) >= old_size){
 				if (!abs_storage_init_skimming(as->asf_buffer + i)){
