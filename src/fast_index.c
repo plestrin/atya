@@ -5,9 +5,16 @@
 
 #include "fast_index.h"
 
+/* Return value :
+	0 : success, no new item
+	1 : success, new item
+	2 : error ENOMEM
+*/
+
 static int index_insert(void** root, const uint8_t* value, size_t index_size){
 	uint8_t idx;
 	uint8_t* leaf;
+	int result;
 
 	idx = value[0];
 	if (index_size > 2){
@@ -22,13 +29,14 @@ static int index_insert(void** root, const uint8_t* value, size_t index_size){
 	}
 	else {
 		leaf = (uint8_t*)root;
+		result = (leaf[idx >> 2] >> (2 * (idx & 0x3))) & 1;
 		leaf[idx >> 2] |= 1 << (2 * (idx & 0x3));
-		return 0;
+		return result;
 	}
 
 	if (root[idx] == NULL){
 		fprintf(stderr, "[-] in %s, unable to allocate memory\n", __func__);
-		return ENOMEM;
+		return 2;
 	}
 
 	return index_insert(root[idx], value + 1, index_size - 1);
@@ -36,6 +44,7 @@ static int index_insert(void** root, const uint8_t* value, size_t index_size){
 
 int fast_index_insert(struct fast_index* fi, const uint8_t* value){
 	uint16_t idx;
+	int result;
 
 	idx = *(uint16_t*)value;
 	if (fi->root[idx] == NULL){
@@ -45,7 +54,14 @@ int fast_index_insert(struct fast_index* fi, const uint8_t* value){
 		}
 	}
 
-	return index_insert(fi->root[idx], value + 2, fi->size - 2);
+	result = index_insert(fi->root[idx], value + 2, fi->size - 2);
+	if (result & 2){
+		return ENOMEM;
+	}
+
+	fi->nb_item += result;
+
+	return 0;
 }
 
 int fast_index_insert_buffer(struct fast_index* fi, const uint8_t* buffer, size_t size){
@@ -240,46 +256,12 @@ void fast_index_clean(struct fast_index* fi){
 			fi->root[i] = NULL;
 		}
 	}
+	fi->nb_item = 0;
 }
 
 void fast_index_delete(struct fast_index* fi){
 	fast_index_clean(fi);
 	free(fi);
-}
-
-static uint64_t index_count(void** root, size_t index_size){
-	uint32_t i;
-	uint64_t cnt = 0;
-
-	if (index_size > 1){
-		for (i = 0; i < 0x100; i++){
-			if (root[i] != NULL){
-				cnt += index_count(root[i], index_size - 1);
-			}
-		}
-	}
-	else {
-		uint64_t* leaf = (uint64_t*)root;
-
-		for (i = 0; i < 8; i++){
-			cnt += __builtin_popcountll(leaf[i]);
-		}
-	}
-
-	return cnt;
-}
-
-uint64_t fast_index_count(struct fast_index* fi){
-	uint32_t i;
-	uint64_t cnt;
-
-	for (i = 0, cnt = 0; i < 0x10000; i++){
-		if (fi->root[i] != NULL){
-			cnt += index_count(fi->root[i], fi->size - 2);
-		}
-	}
-
-	return cnt;
 }
 
 static uint64_t index_remove(void** root, size_t index_size, uint64_t sel){
@@ -316,21 +298,20 @@ static uint64_t index_remove(void** root, size_t index_size, uint64_t sel){
 
 uint64_t fast_index_remove(struct fast_index* fi, uint64_t sel){
 	uint32_t i;
-	uint64_t local_cnt;
 	uint64_t cnt;
 
-	for (i = 0, cnt = 0; i < 0x10000; i++){
+	for (i = 0, fi->nb_item = 0; i < 0x10000; i++){
 		if (fi->root[i] != NULL){
-			local_cnt = index_remove(fi->root[i], fi->size - 2, sel);
-			if (!local_cnt){
+			cnt = index_remove(fi->root[i], fi->size - 2, sel);
+			if (!cnt){
 				free(fi->root[i]);
 				fi->root[i] = NULL;
 			}
 			else {
-				cnt += local_cnt;
+				fi->nb_item += cnt;
 			}
 		}
 	}
 
-	return cnt;
+	return fi->nb_item;
 }

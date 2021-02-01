@@ -337,12 +337,11 @@ static int generate(struct gory_sewer_knob* gsk_in, struct last_index* li){
 	int fi_index = 0;
 	struct simple_index* si_buffer[2] = {NULL, NULL};
 	int si_index = 0;
-	uint64_t nb_pattern;
 	struct abs_storage as;
 	int status = 0;
 
 	if (abs_storage_init(&as, gsk_in)){
-		fprintf(stderr, "[-] in %s, unable to initialize abs abs storage\n", __func__);
+		fprintf(stderr, "[-] in %s, unable to initialize abs storage\n", __func__);
 		return -1;
 	}
 
@@ -352,23 +351,27 @@ static int generate(struct gory_sewer_knob* gsk_in, struct last_index* li){
 		goto exit;
 	}
 
-	nb_pattern = fast_index_count(fi_buffer[fi_index]);
-	fprintf(stderr, "[+] starting with %lu pattern(s) of size %zu in inc file(s)\n", nb_pattern, fi_buffer[fi_index]->size);
+	fprintf(stderr, "[+] starting fast with %lu pattern(s) of size %zu in inc file(s)\n", fi_buffer[fi_index]->nb_item, fi_buffer[fi_index]->size);
 
-	while (nb_pattern && fi_buffer[fi_index]->size < SIMPLE){
+	for (; fi_buffer[fi_index]->nb_item; fi_index = (fi_index + 1) & 0x1){
+		if (fi_buffer[fi_index]->size >= SIMPLE){
+			break;
+		}
 		if (fast_next(fi_buffer[fi_index], &as, fi_buffer + ((fi_index + 1) & 0x1))){
 			fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, fi_buffer[fi_index]->size + 1);
 			status = EXIT_FAILURE;
 			goto exit;
 		}
+
+		if (!fi_buffer[fi_index]->nb_item){
+			continue;
+		}
+
 		fast_push(li, fi_buffer[fi_index]);
 		fast_index_clean(fi_buffer[fi_index]);
-
-		fi_index = (fi_index + 1) & 0x1;
-		nb_pattern = fast_index_count(fi_buffer[fi_index]);
 	}
 
-	if (!nb_pattern){
+	if (!fi_buffer[fi_index]->nb_item){
 		goto exit;
 	}
 
@@ -377,8 +380,7 @@ static int generate(struct gory_sewer_knob* gsk_in, struct last_index* li){
 		goto exit;
 	}
 
-	fprintf(stderr, "[+] starting simple with %lu pattern(s) of size %zu in inc file(s)\n", nb_pattern, fi_buffer[fi_index]->size);
-
+	fprintf(stderr, "[+] starting simple with %lu pattern(s) of size %zu in inc file(s)\n", fi_buffer[fi_index]->nb_item, fi_buffer[fi_index]->size);
 
 	if (mixed_next(fi_buffer[fi_index], &as, si_buffer)){
 		fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, fi_buffer[fi_index]->size + 1);

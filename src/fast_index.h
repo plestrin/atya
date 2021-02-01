@@ -6,13 +6,12 @@
 
 struct fast_index {
 	size_t size;
+	uint64_t nb_item;
 	void* root[0x10000];
 };
 
 int fast_index_insert(struct fast_index* fi, const uint8_t* value);
 int fast_index_insert_buffer(struct fast_index* fi, const uint8_t* buffer, size_t size);
-
-uint64_t fast_index_count(struct fast_index* fi);
 
 int fast_index_get_first(struct fast_index* fi, uint8_t* value, size_t mask_size);
 int fast_index_get_next(struct fast_index* fi, uint8_t* value, size_t mask_size);
