@@ -1,3 +1,4 @@
 build/*.o
 atya
 test_last_index
+adapter/__pycache__
