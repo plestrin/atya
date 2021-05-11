@@ -1,4 +1,5 @@
 build/*.o
-atya
+intersect
+exclude
 test_last_index
 adapter/__pycache__
