@@ -11,8 +11,6 @@ static int last_exclude_files(struct last_index* li, struct gory_sewer_knob* gsk
 	char* file_path;
 	int status = 0;
 
-	fprintf(stderr, "[+] starting exclusion with %lu patterns\n", li->nb_item);
-
 	for (file_path = gory_sewer_first(gsk_files); file_path != NULL; file_path = gory_sewer_next(gsk_files)){
 		if ((status = last_index_exclude_file(li, file_path))){
 			fprintf(stderr, "[-] in %s, unable to exclude file: %s\n", __func__, file_path);
@@ -34,7 +32,7 @@ static struct gory_sewer_knob* parse_cmd_line(int argc, char** argv){
 	}
 
 	if ((file_gsk = gory_sewer_create(0x4000)) == NULL){
-		fprintf(stderr, "[-] in %s, unable to init gory sewers\n", __func__);
+		fprintf(stderr, "[-] in %s, unable to create gory sewer\n", __func__);
 		return NULL;
 	}
 
@@ -46,52 +44,77 @@ static struct gory_sewer_knob* parse_cmd_line(int argc, char** argv){
 		}
 	}
 
-	fprintf(stderr, "[+] command line: %lu file(s)\n", file_gsk->nb_item);
+	fprintf(stderr, "[+] exclude command line: %lu file(s)\n", file_gsk->nb_item);
 
 	return file_gsk;
 }
 
-#define START 6
-#define STOP 4096
-
 static struct last_index li;
 
 int main(int argc, char** argv){
+	int status = EXIT_SUCCESS;
 	struct gory_sewer_knob* file_gsk;
-	uint64_t size;
-	uint8_t pattern[STOP];
+	struct gory_sewer_knob* pattern_gsk;
+
 
 	if ((file_gsk = parse_cmd_line(argc, argv)) == NULL){
 		return EXIT_FAILURE;
 	}
 
-	last_index_init(&li, START);
-
-	while (fread(&size, sizeof size, 1, stdin)){
-		if (size < START){
-			fprintf(stderr, "[-] in %s, pattern %lu is too small: %lu\n", __func__, li.nb_item, size);
-			break;
-		}
-		if (size > STOP){
-			fprintf(stderr, "[-] in %s, pattern %lu is too large: %lu\n", __func__, li.nb_item, size);
-			break;
-		}
-
-		if (fread(pattern, size, 1, stdin) != 1){
-			fprintf(stderr, "[-] in %s, unable to read pattern\n", __func__);
-			break;
-		}
-
-		if (last_index_push(&li, pattern, size)){
-			fprintf(stderr, "[-] in %s, unable to push data to last index\n", __func__);
-		}
+	if ((pattern_gsk = gory_sewer_create(0x10000)) == NULL){
+		fprintf(stderr, "[-] in %s, unable to create gory sewer\n", __func__);
+		status = EXIT_FAILURE;
 	}
+	else {
+		uint64_t rd_size;
+		void* pattern;
+		uint64_t size_min = 0xffffffffffffffff;
+		uint64_t size_max = 0;
+		size_t it_size;
 
+		while (fread(&rd_size, sizeof rd_size, 1, stdin)){
+			if (!rd_size){
+				continue;
+			}
 
-	last_exclude_files(&li, file_gsk);
-	last_index_dump_and_clean(&li, stdout);
+			if ((pattern = gs_sl_alloc(pattern_gsk, rd_size)) == NULL){
+				fprintf(stderr, "[-] in %s, unable to alloc %zu bytes in gory sewer\n", __func__, rd_size);
+				status = EXIT_FAILURE;
+				continue;
+			}
+
+			if (fread(pattern, rd_size, 1, stdin) != 1){
+				fprintf(stderr, "[-] in %s, unable to read pattern\n", __func__);
+				status = EXIT_FAILURE;
+				break;
+			}
+
+			if (rd_size < size_min){
+				size_min = rd_size;
+			}
+			if (rd_size > size_max){
+				size_max = rd_size;
+			}
+		}
+
+		fprintf(stderr, "[+] %lu pattern(s) read, %lu <= size <= %lu\n", pattern_gsk->nb_item, size_min, size_max);
+
+		last_index_init(&li, size_min);
+
+		for (pattern = gs_sl_first(pattern_gsk, &it_size); pattern != NULL; pattern = gs_sl_next(pattern_gsk, &it_size)){
+			if (last_index_push(&li, pattern, it_size)){
+				fprintf(stderr, "[-] in %s, unable to push data to last index\n", __func__);
+				status = EXIT_FAILURE;
+			}
+		}
+
+		last_exclude_files(&li, file_gsk);
+		last_index_dump_and_clean(&li, stdout);
+
+		gory_sewer_delete(pattern_gsk);
+	}
 
 	gory_sewer_delete(file_gsk);
 
-	return EXIT_SUCCESS;
+	return status;
 }

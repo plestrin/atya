@@ -261,7 +261,7 @@ static struct gory_sewer_knob* parse_cmd_line(int argc, char** argv){
 	}
 
 	if ((file_gsk = gory_sewer_create(0x4000)) == NULL){
-		fprintf(stderr, "[-] in %s, unable to init gory sewers\n", __func__);
+		fprintf(stderr, "[-] in %s, unable to create gory sewer\n", __func__);
 		return NULL;
 	}
 
@@ -273,7 +273,7 @@ static struct gory_sewer_knob* parse_cmd_line(int argc, char** argv){
 		}
 	}
 
-	fprintf(stderr, "[+] command line: %lu file(s)\n", file_gsk->nb_item);
+	fprintf(stderr, "[+] intersect command line: %lu file(s)\n", file_gsk->nb_item);
 
 	return file_gsk;
 }
