@@ -6,7 +6,7 @@
 
 #include "gory_sewer.h"
 
-struct gory_sewer_last {
+struct gory_sewer_first {
 	void* next;
 	size_t rem_size;
 };
@@ -15,11 +15,11 @@ struct gory_sewer_knob* gory_sewer_create(size_t chunk_size){
 	size_t first_chunk_size;
 	uint8_t* chunk;
 	struct gory_sewer_knob* gsk;
-	struct gory_sewer_last* gsl;
+	struct gory_sewer_first* gsf;
 
 	first_chunk_size = chunk_size;
-	if (first_chunk_size < sizeof(struct gory_sewer_knob) + sizeof(struct gory_sewer_last)){
-		first_chunk_size = sizeof(struct gory_sewer_knob) + sizeof(struct gory_sewer_last);
+	if (first_chunk_size < sizeof(struct gory_sewer_knob) + sizeof(struct gory_sewer_first)){
+		first_chunk_size = sizeof(struct gory_sewer_knob) + sizeof(struct gory_sewer_first);
 	}
 
 	if ((chunk = malloc(first_chunk_size)) == NULL){
@@ -31,90 +31,130 @@ struct gory_sewer_knob* gory_sewer_create(size_t chunk_size){
 	gsk->head = NULL;
 	gsk->tail = NULL;
 	gsk->curr = NULL;
-	gsk->chunk_size = (chunk_size < sizeof(struct gory_sewer_last)) ? sizeof(struct gory_sewer_last) : chunk_size;
+	gsk->chunk_size = (chunk_size < sizeof(struct gory_sewer_first)) ? sizeof(struct gory_sewer_first) : chunk_size;
 	gsk->nb_item = 0;
 
-	gsl = (struct gory_sewer_last*)(gsk + 1);
-	gsl->next = NULL;
-	gsl->rem_size = first_chunk_size - sizeof(struct gory_sewer_knob) - sizeof(void*);
+	gsf = (struct gory_sewer_first*)(gsk + 1);
+	gsf->next = NULL;
+	gsf->rem_size = first_chunk_size - sizeof(struct gory_sewer_knob) - sizeof(void*);
 
 	return gsk;
 }
 
-void* gory_sewer_push(struct gory_sewer_knob* gsk, const void* ptr, size_t size){
-	struct gory_sewer_last* gsl;
-	struct gory_sewer_last* new_gsl;
+static void* gory_sewer_alloc_std(struct gory_sewer_knob* gsk, size_t size){
+	struct gory_sewer_first* gsf;
+	struct gory_sewer_first* new_gsf;
 	size_t rem_size;
 
-	if (size > gsk->chunk_size + sizeof(void*)){
-		printf("[-] in %s, item size is larger than chunk size\n", __func__);
-		return NULL;
-	}
-
 	if (gsk->head == NULL){
-		gsl = (struct gory_sewer_last*)(gsk + 1);
+		gsf = (struct gory_sewer_first*)(gsk + 1);
 	}
 	else {
-		gsl = *((void**)gsk->head);
+		gsf = *gsk->head;
 	}
 
-	rem_size = gsl->rem_size;
+	rem_size = gsf->rem_size;
 	if (rem_size < size){
-		if ((gsl = malloc(gsk->chunk_size)) == NULL){
+		if ((gsf = malloc(gsk->chunk_size)) == NULL){
 			printf("[-] in %s, unable to allocate memory\n", __func__);
 			return NULL;
 		}
 		rem_size = gsk->chunk_size - sizeof(void*);
 		if (gsk->head != NULL){
-			*(void**)gsk->head = gsl;
+			*gsk->head = gsf;
 		}
 	}
 
 	rem_size -= size;
 
-	if (rem_size < sizeof(struct gory_sewer_last)){
-		if ((new_gsl = malloc(gsk->chunk_size)) == NULL){
+	if (rem_size < sizeof(struct gory_sewer_first)){
+		if ((new_gsf = malloc(gsk->chunk_size)) == NULL){
 			printf("[-] in %s, unable to allocate memory\n", __func__);
 			return NULL;
 		}
 		rem_size = gsk->chunk_size;
 	}
 	else {
-		new_gsl = (struct gory_sewer_last*)((uint8_t*)gsl + sizeof(void*) + size);
+		new_gsf = (struct gory_sewer_first*)((uint8_t*)gsf + sizeof(void*) + size);
 	}
 
-	memcpy((uint8_t*)gsl + sizeof(void*), ptr, size);
+	gsf->next = new_gsf;
 
+	new_gsf->next = NULL;
+	new_gsf->rem_size = rem_size - sizeof(void*);
+
+	return gsf;
+}
+
+static void* gory_sewer_alloc_ext(struct gory_sewer_knob* gsk, size_t size){
+	void* raw;
+
+	if ((raw = malloc(sizeof(void*) + size)) == NULL){
+		printf("[-] in %s, unable to allocate memory\n", __func__);
+		return NULL;
+	}
+
+	if (gsk->head == NULL){
+		*(void**)raw = gsk + 1;
+	}
+	else {
+		*(void**)raw = *gsk->head;
+		*gsk->head = raw;
+	}
+
+	return raw;
+}
+
+void* gory_sewer_alloc(struct gory_sewer_knob* gsk, size_t size){
+	void* raw;
+
+	if (size >= gsk->chunk_size - sizeof(void*)){
+		raw = gory_sewer_alloc_ext(gsk, size);
+	}
+	else {
+		raw = gory_sewer_alloc_std(gsk, size);
+	}
+
+	if (raw == NULL){
+		return raw;
+	}
+
+	gsk->head = raw;
 	if (gsk->tail == NULL){
-		gsk->tail = (void**)gsl;
+		gsk->tail = raw;
 	}
-	gsk->head = (void**)gsl;
-	gsl->next = new_gsl;
 
 	gsk->nb_item ++;
 
-	new_gsl->next = NULL;
-	new_gsl->rem_size = rem_size - sizeof(void*);
+	return (uint8_t*)raw + sizeof(void*);
+}
 
-	return (uint8_t*)gsl + sizeof(void*);
+void* gory_sewer_push(struct gory_sewer_knob* gsk, const void* ptr, size_t size){
+	void* dst;
+
+	if ((dst = gory_sewer_alloc(gsk, size)) != NULL){
+		memcpy(dst, ptr, size);
+	}
+
+	return dst;
 }
 
 void* gory_sewer_first(struct gory_sewer_knob* gsk){
 	if (gsk->tail == NULL){
 		return NULL;
 	}
-	gsk->curr = *(void**)gsk->tail;
+	gsk->curr = *gsk->tail;
 	return (uint8_t*)gsk->tail + sizeof(void*);
 }
 
 void* gory_sewer_next(struct gory_sewer_knob* gsk){
 	void* result;
 
-	if (*(void**)gsk->curr == NULL){
+	if (*gsk->curr == NULL){
 		return NULL;
 	}
 	result = (uint8_t*)gsk->curr + sizeof(void*);
-	gsk->curr = *(void**)gsk->curr;
+	gsk->curr = *gsk->curr;
 	return result;
 }
 
@@ -141,4 +181,47 @@ void gory_sewer_delete(struct gory_sewer_knob* gsk){
 		free(addr_prev);
 	}
 	free(gsk);
+}
+
+void* gs_sl_alloc(struct gory_sewer_knob* gsk, size_t size){
+	void* raw;
+
+	if ((raw = gory_sewer_alloc(gsk, size + sizeof(size_t))) == NULL){
+		return NULL;
+	}
+
+	*(size_t*)raw = size;
+	return (uint8_t*)raw + sizeof(size_t);
+}
+
+void* gs_sl_push(struct gory_sewer_knob* gsk, const void* ptr, size_t size){
+	void* dst;
+
+	if ((dst = gs_sl_alloc(gsk, size)) != NULL){
+		memcpy(dst, ptr, size);
+	}
+
+	return dst;
+}
+
+void* gs_sl_first(struct gory_sewer_knob* gsk, size_t* size){
+	void* raw;
+
+	if ((raw = gory_sewer_first(gsk)) == NULL){
+		return NULL;
+	}
+
+	*size = *(size_t*)raw;
+	return (uint8_t*)raw + sizeof(size_t);
+}
+
+void* gs_sl_next(struct gory_sewer_knob* gsk, size_t* size){
+	void* raw;
+
+	if ((raw = gory_sewer_next(gsk)) == NULL){
+		return NULL;
+	}
+
+	*size = *(size_t*)raw;
+	return (uint8_t*)raw + sizeof(size_t);
 }
