@@ -21,15 +21,15 @@ static inline struct last_entry_item* last_entry_get_item_buffer(struct last_ent
 static struct last_entry* last_entry_push(struct last_entry* le, const uint8_t* data, size_t size){
 	struct last_entry* new_le;
 	uint64_t nb_alloc = 0;
-	uint64_t nb_used = 0;
+	uint64_t nb_item = 0;
 	struct last_entry_item* lei_buffer;
 
 	if (le != NULL){
 		nb_alloc = le->nb_alloc;
-		nb_used = le->nb_used;
+		nb_item = le->nb_item;
 	}
 
-	if (le->nb_alloc == le->nb_used){
+	if (le->nb_alloc == le->nb_item){
 		nb_alloc += DEFAULT_ITEM_PER_ENTRY;
 
 		if ((new_le = realloc(le, sizeof(struct last_entry) + nb_alloc * sizeof(struct last_entry_item))) == NULL){
@@ -39,36 +39,34 @@ static struct last_entry* last_entry_push(struct last_entry* le, const uint8_t* 
 
 		le = new_le;
 		le->nb_alloc = nb_alloc;
-		le->nb_used = nb_used;
+		le->nb_item = nb_item;
 	}
 
 	lei_buffer = last_entry_get_item_buffer(le);
 
-	lei_buffer[le->nb_used].size = size;
-	lei_buffer[le->nb_used].data = data;
+	lei_buffer[le->nb_item].size = size;
+	lei_buffer[le->nb_item].data = data;
 
-	le->nb_used ++;
+	le->nb_item ++;
 
 	return le;
 }
 
-static uint32_t last_entry_exclude(struct last_entry* le, const void* data, size_t size){
+static void last_entry_exclude(struct last_entry* le, const void* data, size_t size){
 	struct last_entry_item* lei_buffer;
 	uint64_t i;
 
 	lei_buffer = last_entry_get_item_buffer(le);
 
-	for (i = 0; i < le->nb_used; i ++){
+	for (i = 0; i < le->nb_item; i ++){
 		if (lei_buffer[i].size <= size && !memcmp(lei_buffer[i].data, data, lei_buffer[i].size)){
-			le->nb_used --;
-			if (i < le->nb_used){
-				memcpy(lei_buffer + i, lei_buffer + le->nb_used, sizeof(struct last_entry_item));
+			le->nb_item --;
+			if (i < le->nb_item){
+				memcpy(lei_buffer + i, lei_buffer + le->nb_item, sizeof(struct last_entry_item));
 			}
-			return 1;
+			return;
 		}
 	}
-
-	return 0;
 }
 
 static void last_entry_dump(struct last_entry* le, FILE* stream){
@@ -78,7 +76,7 @@ static void last_entry_dump(struct last_entry* le, FILE* stream){
 
 	lei_buffer = last_entry_get_item_buffer(le);
 
-	for (i = 0; i < le->nb_used; i ++){
+	for (i = 0; i < le->nb_item; i ++){
 		size = lei_buffer[i].size;
 		fwrite(&size, sizeof size, 1, stream);
 		fwrite(lei_buffer[i].data, lei_buffer[i].size, 1, stream);
@@ -106,7 +104,6 @@ int last_index_push(struct last_index* li, const uint8_t* data, size_t size){
 	}
 
 	li->index[hash] = le;
-	li->nb_item ++;
 	if (size > li->max_size){
 		li->max_size = size;
 	}
@@ -118,15 +115,26 @@ static void last_index_exclude_buffer(struct last_index* li, const uint8_t* buff
 	uint16_t hash;
 	size_t offset;
 
-	for (offset = 0; offset + overlap <= size; offset ++){
-		hash = hash_init(buffer + offset, li->min_size);
+	if (overlap > size){
+		return;
+	}
+
+	hash = hash_init(buffer, li->min_size);
+
+	for (offset = 0; ; offset ++){
 		if (li->index[hash] != NULL){
-			li->nb_item -= last_entry_exclude(li->index[hash], buffer + offset, size - offset);
-			if (!li->index[hash]->nb_used){
+			last_entry_exclude(li->index[hash], buffer + offset, size - offset);
+			if (!li->index[hash]->nb_item){
 				free(li->index[hash]);
 				li->index[hash] = NULL;
 			}
 		}
+
+		if (offset + overlap >= size){
+			break;
+		}
+
+		hash = hash_update(hash, buffer[offset], buffer[offset + li->min_size], li->min_size);
 	}
 }
 
@@ -136,6 +144,7 @@ int last_index_exclude_file(struct last_index* li, const char* file_name){
 	FILE* handle;
 	int status;
 	size_t rd_sz;
+	size_t da_sz;
 
 	if (li->max_size >= sizeof chunk){
 		fprintf(stderr, "[-] in %s, chunk is too small to handle item of size 0x%zx\n", __func__, li->max_size);
@@ -148,17 +157,13 @@ int last_index_exclude_file(struct last_index* li, const char* file_name){
 		return status;
 	}
 
-	for (rd_sz = fread(chunk, 1, sizeof chunk, handle); ; ){
-		if (rd_sz < sizeof chunk){
-			last_index_exclude_buffer(li, chunk, rd_sz, li->min_size);
-			break;
-		}
-
-		last_index_exclude_buffer(li, chunk, rd_sz, li->max_size);
-		memmove(chunk, chunk + rd_sz - li->max_size + 1, li->max_size - 1);
+	for (rd_sz = fread(chunk, 1, sizeof chunk, handle), da_sz = rd_sz; da_sz < sizeof chunk; rd_sz += li->max_size - 1){
+		last_index_exclude_buffer(li, chunk, sizeof chunk, li->max_size);
+		memmove(chunk, chunk + sizeof chunk - li->max_size + 1, li->max_size - 1);
 		rd_sz = fread(chunk + li->max_size - 1, 1, sizeof chunk - li->max_size + 1, handle);
-		rd_sz += li->max_size - 1;
 	}
+
+	last_index_exclude_buffer(li, chunk, rd_sz, li->min_size);
 
 	fclose(handle);
 
@@ -167,14 +172,16 @@ int last_index_exclude_file(struct last_index* li, const char* file_name){
 
 void last_index_dump_and_clean(struct last_index* li, FILE* steam){
 	uint32_t i;
+	uint64_t cnt;
 
-	for (i = 0; i < 0x10000; i++){
+	for (i = 0, cnt = 0; i < 0x10000; i++){
 		if (li->index[i] != NULL){
 			last_entry_dump(li->index[i], steam);
+			cnt += li->index[i]->nb_item;
 			free(li->index[i]);
 			li->index[i] = NULL;
 		}
 	}
 
-	fprintf(stderr, "[+] %lu patterns dumped\n", li->nb_item);
+	fprintf(stderr, "[+] %lu pattern(s) dumped\n", cnt);
 }

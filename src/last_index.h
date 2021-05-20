@@ -7,13 +7,12 @@
 
 struct last_entry {
 	uint64_t nb_alloc;
-	uint64_t nb_used;
+	uint64_t nb_item;
 };
 
 struct last_index {
 	size_t min_size;
 	size_t max_size;
-	uint64_t nb_item;
 	struct last_entry* index[0x10000];
 };
 

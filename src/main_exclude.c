@@ -14,7 +14,6 @@ static int last_exclude_files(struct last_index* li, struct gory_sewer_knob* gsk
 	for (file_path = gory_sewer_first(gsk_files); file_path != NULL; file_path = gory_sewer_next(gsk_files)){
 		if ((status = last_index_exclude_file(li, file_path))){
 			fprintf(stderr, "[-] in %s, unable to exclude file: %s\n", __func__, file_path);
-			break;
 		}
 	}
 
@@ -78,7 +77,7 @@ int main(int argc, char** argv){
 			}
 
 			if ((pattern = gs_sl_alloc(pattern_gsk, rd_size)) == NULL){
-				fprintf(stderr, "[-] in %s, unable to alloc %zu bytes in gory sewer\n", __func__, rd_size);
+				fprintf(stderr, "[-] in %s, unable to allocate %zu bytes in gory sewer\n", __func__, rd_size);
 				status = EXIT_FAILURE;
 				continue;
 			}
@@ -86,7 +85,7 @@ int main(int argc, char** argv){
 			if (fread(pattern, rd_size, 1, stdin) != 1){
 				fprintf(stderr, "[-] in %s, unable to read pattern\n", __func__);
 				status = EXIT_FAILURE;
-				break;
+				continue;
 			}
 
 			if (rd_size < size_min){
