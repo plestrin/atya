@@ -280,7 +280,7 @@ static struct gory_sewer_knob* parse_cmd_line(int argc, char** argv){
 
 #define START 6
 #define SIMPLE 8
-#define STOP 4096
+#define STOP 16384
 
 static int generate(struct gory_sewer_knob* file_gsk){
 	struct fast_index* fi_buffer[2] = {NULL, NULL};
