@@ -250,34 +250,6 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 	return 0;
 }
 
-static struct gory_sewer_knob* parse_cmd_line(int argc, char** argv){
-	char path[4096];
-	struct gory_sewer_knob* file_gsk;
-	int i;
-
-	if (argc < 2){
-		fprintf(stderr, "[-] usage: file [file ...]\n");
-		return NULL;
-	}
-
-	if ((file_gsk = gory_sewer_create(0x4000)) == NULL){
-		fprintf(stderr, "[-] in %s, unable to create gory sewer\n", __func__);
-		return NULL;
-	}
-
-	for (i = 1; i < argc; i++){
-		strncpy(path, argv[i], sizeof path);
-		path[sizeof path - 1] = 0;
-		if (list_files(path, sizeof path, file_gsk)){
-			fprintf(stderr, "[-] in %s, unable to list files in: %s\n", __func__, path);
-		}
-	}
-
-	fprintf(stderr, "[+] intersect command line: %lu file(s)\n", file_gsk->nb_item);
-
-	return file_gsk;
-}
-
 #define START 6
 #define SIMPLE 8
 #define STOP 16384
@@ -386,7 +358,7 @@ int main(int argc, char** argv){
 	struct gory_sewer_knob* file_gsk;
 	int status = EXIT_FAILURE;
 
-	if ((file_gsk = parse_cmd_line(argc, argv)) == NULL){
+	if (parse_cmd_line(argc, argv, &file_gsk)){
 		return EXIT_FAILURE;
 	}
 

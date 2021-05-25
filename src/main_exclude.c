@@ -20,34 +20,6 @@ static int last_exclude_files(struct last_index* li, struct gory_sewer_knob* gsk
 	return status;
 }
 
-static struct gory_sewer_knob* parse_cmd_line(int argc, char** argv){
-	char path[4096];
-	struct gory_sewer_knob* file_gsk;
-	int i;
-
-	if (argc < 2){
-		fprintf(stderr, "[-] usage: file [file ...]\n");
-		return NULL;
-	}
-
-	if ((file_gsk = gory_sewer_create(0x4000)) == NULL){
-		fprintf(stderr, "[-] in %s, unable to create gory sewer\n", __func__);
-		return NULL;
-	}
-
-	for (i = 1; i < argc; i++){
-		strncpy(path, argv[i], sizeof path);
-		path[sizeof path - 1] = 0;
-		if (list_files(path, sizeof path, file_gsk)){
-			fprintf(stderr, "[-] in %s, unable to list files in: %s\n", __func__, path);
-		}
-	}
-
-	fprintf(stderr, "[+] exclude command line: %lu file(s)\n", file_gsk->nb_item);
-
-	return file_gsk;
-}
-
 static struct last_index li;
 
 int main(int argc, char** argv){
@@ -55,8 +27,7 @@ int main(int argc, char** argv){
 	struct gory_sewer_knob* file_gsk;
 	struct gory_sewer_knob* pattern_gsk;
 
-
-	if ((file_gsk = parse_cmd_line(argc, argv)) == NULL){
+	if (parse_cmd_line(argc, argv, &file_gsk)){
 		return EXIT_FAILURE;
 	}
 

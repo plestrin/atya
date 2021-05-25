@@ -10,7 +10,7 @@
 
 #include "utile.h"
 
-int list_files(char* path, size_t max_len, struct gory_sewer_knob* gsk){
+static int list_files(char* path, size_t max_len, struct gory_sewer_knob* gsk){
 	struct stat statbuf;
 	int status;
 	size_t len;
@@ -79,6 +79,43 @@ int list_files(char* path, size_t max_len, struct gory_sewer_knob* gsk){
 
 		closedir(d);
 	}
+
+	return 0;
+}
+
+static char* get_file_name(char* path){
+	char* name;
+
+	if ((name = strrchr(path, '/')) != NULL){
+		return name + 1;
+	}
+
+	return path;
+}
+
+int parse_cmd_line(int argc, char** argv, struct gory_sewer_knob** file_gsk_ptr){
+	char path[4096];
+	int i;
+
+	if (argc < 2){
+		fprintf(stderr, "[-] usage: %s file [file ...]\n", get_file_name(argv[0]));
+		return EINVAL;
+	}
+
+	if ((*file_gsk_ptr = gory_sewer_create(0x4000)) == NULL){
+		fprintf(stderr, "[-] in %s, unable to create gory sewer\n", __func__);
+		return ENOMEM;
+	}
+
+	for (i = 1; i < argc; i++){
+		strncpy(path, argv[i], sizeof path);
+		path[sizeof path - 1] = 0;
+		if (list_files(path, sizeof path, *file_gsk_ptr)){
+			fprintf(stderr, "[-] in %s, unable to list files in: %s\n", __func__, path);
+		}
+	}
+
+	fprintf(stderr, "[+] %s command line: %lu file(s)\n", get_file_name(argv[0]), (*file_gsk_ptr)->nb_item);
 
 	return 0;
 }
