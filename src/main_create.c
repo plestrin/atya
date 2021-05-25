@@ -254,7 +254,7 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 #define SIMPLE 8
 #define STOP 16384
 
-static int generate(struct gory_sewer_knob* file_gsk){
+static int create(struct gory_sewer_knob* file_gsk){
 	struct fast_index* fi_buffer[2] = {NULL, NULL};
 	int fi_index = 0;
 	struct simple_index* si_buffer[2] = {NULL, NULL};
@@ -356,14 +356,15 @@ static int generate(struct gory_sewer_knob* file_gsk){
 
 int main(int argc, char** argv){
 	struct gory_sewer_knob* file_gsk;
-	int status = EXIT_FAILURE;
+	unsigned int flags;
+	int status = EXIT_SUCCESS;
 
-	if (parse_cmd_line(argc, argv, &file_gsk)){
+	if (parse_cmd_line(argc, argv, &file_gsk, &flags)){
 		return EXIT_FAILURE;
 	}
 
-	if (!generate(file_gsk)){
-		status = EXIT_SUCCESS;
+	if (create(file_gsk)){
+		status = EXIT_FAILURE;
 	}
 
 	gory_sewer_delete(file_gsk);

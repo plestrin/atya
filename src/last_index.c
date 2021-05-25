@@ -18,11 +18,13 @@ static inline struct last_entry_item* last_entry_get_item_buffer(struct last_ent
 	return (struct last_entry_item*)(le + 1);
 }
 
-static struct last_entry* last_entry_push(struct last_entry* le, const uint8_t* data, size_t size){
-	struct last_entry* new_le;
+static int last_entry_push(struct last_entry** le_ptr, const uint8_t* data, size_t size){
+	struct last_entry* le;
 	uint64_t nb_alloc = 0;
 	uint64_t nb_item = 0;
 	struct last_entry_item* lei_buffer;
+
+	le = *le_ptr;
 
 	if (le != NULL){
 		nb_alloc = le->nb_alloc;
@@ -32,14 +34,15 @@ static struct last_entry* last_entry_push(struct last_entry* le, const uint8_t* 
 	if (le->nb_alloc == le->nb_item){
 		nb_alloc += DEFAULT_ITEM_PER_ENTRY;
 
-		if ((new_le = realloc(le, sizeof(struct last_entry) + nb_alloc * sizeof(struct last_entry_item))) == NULL){
+		if ((le = realloc(le, sizeof(struct last_entry) + nb_alloc * sizeof(struct last_entry_item))) == NULL){
 			fprintf(stderr, "[-] in %s, unable to realloc memory\n", __func__);
-			return NULL;
+			return ENOMEM;
 		}
 
-		le = new_le;
 		le->nb_alloc = nb_alloc;
 		le->nb_item = nb_item;
+
+		*le_ptr = le;
 	}
 
 	lei_buffer = last_entry_get_item_buffer(le);
@@ -49,10 +52,10 @@ static struct last_entry* last_entry_push(struct last_entry* le, const uint8_t* 
 
 	le->nb_item ++;
 
-	return le;
+	return 0;
 }
 
-static void last_entry_exclude(struct last_entry* le, const void* data, size_t size){
+static int last_entry_exclude(struct last_entry* le, const void* data, size_t size){
 	struct last_entry_item* lei_buffer;
 	uint64_t i;
 
@@ -64,9 +67,11 @@ static void last_entry_exclude(struct last_entry* le, const void* data, size_t s
 			if (i < le->nb_item){
 				memcpy(lei_buffer + i, lei_buffer + le->nb_item, sizeof(struct last_entry_item));
 			}
-			return;
+			return 1;
 		}
 	}
+
+	return 0;
 }
 
 static void last_entry_dump(struct last_entry* le, FILE* stream){
@@ -86,27 +91,29 @@ static void last_entry_dump(struct last_entry* le, FILE* stream){
 void last_index_init(struct last_index* li, size_t min_size){
 	li->min_size = min_size;
 	li->max_size = 0;
+	li->nb_item = 0;
 	memset(li->index, 0, sizeof li->index);
 }
 
 int last_index_push(struct last_index* li, const uint8_t* data, size_t size){
 	uint16_t hash;
-	struct last_entry* le;
+	int status;
 
 	if (size < li->min_size){
-		fprintf(stderr, "[-] in %s, size argument is too small\n", __func__);
+		fprintf(stderr, "[-] in %s, data is too small\n", __func__);
 		return EINVAL;
 	}
 
 	hash = hash_init(data, li->min_size);
-	if ((le = last_entry_push(li->index[hash], data, size)) == NULL){
-		return ENOMEM;
+	if ((status = last_entry_push(li->index + hash, data, size))){
+		return status;
 	}
 
-	li->index[hash] = le;
 	if (size > li->max_size){
 		li->max_size = size;
 	}
+
+	li->nb_item ++;
 
 	return 0;
 }
@@ -123,10 +130,12 @@ static void last_index_exclude_buffer(struct last_index* li, const uint8_t* buff
 
 	for (offset = 0; ; offset ++){
 		if (li->index[hash] != NULL){
-			last_entry_exclude(li->index[hash], buffer + offset, size - offset);
-			if (!li->index[hash]->nb_item){
-				free(li->index[hash]);
-				li->index[hash] = NULL;
+			if (last_entry_exclude(li->index[hash], buffer + offset, size - offset)){
+				if (!li->index[hash]->nb_item){
+					free(li->index[hash]);
+					li->index[hash] = NULL;
+				}
+				li->nb_item --;
 			}
 		}
 
@@ -172,16 +181,12 @@ int last_index_exclude_file(struct last_index* li, const char* file_name){
 
 void last_index_dump_and_clean(struct last_index* li, FILE* steam){
 	uint32_t i;
-	uint64_t cnt;
 
-	for (i = 0, cnt = 0; i < 0x10000; i++){
+	for (i = 0; i < 0x10000; i++){
 		if (li->index[i] != NULL){
 			last_entry_dump(li->index[i], steam);
-			cnt += li->index[i]->nb_item;
 			free(li->index[i]);
 			li->index[i] = NULL;
 		}
 	}
-
-	fprintf(stderr, "[+] %lu pattern(s) dumped\n", cnt);
 }

@@ -6,8 +6,16 @@
 
 #include "gory_sewer.h"
 
-int parse_cmd_line(int argc, char** argv, struct gory_sewer_knob** file_gsk_ptr);
+#define CMD_FLAG_VERBOSE 0x01
+
+int parse_cmd_line(int argc, char** argv, struct gory_sewer_knob** file_gsk_ptr, unsigned int* flags_ptr);
 
 int load_file(const char* file_name, uint8_t** data_ptr, size_t* size_ptr);
+
+#define log_info(flags, M, ...) 						\
+	if (flags & CMD_FLAG_VERBOSE) { 					\
+		fprintf(stderr, "[+] " M "\n", ##__VA_ARGS__); 	\
+	}
+
 
 #endif
