@@ -157,7 +157,7 @@ int last_index_exclude_file(struct last_index* li, const char* file_name){
 		return status;
 	}
 
-	for (rd_sz = fread(chunk, 1, sizeof chunk, handle), da_sz = rd_sz; da_sz < sizeof chunk; da_sz = rd_sz + li->max_size - 1){
+	for (rd_sz = fread(chunk, 1, sizeof chunk, handle), da_sz = rd_sz; da_sz == sizeof chunk; da_sz = rd_sz + li->max_size - 1){
 		last_index_exclude_buffer(li, chunk, sizeof chunk, li->max_size);
 		memmove(chunk, chunk + sizeof chunk - li->max_size + 1, li->max_size - 1);
 		rd_sz = fread(chunk + li->max_size - 1, 1, sizeof chunk - li->max_size + 1, handle);
