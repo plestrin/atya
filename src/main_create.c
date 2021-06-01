@@ -62,9 +62,8 @@ static int fast_insert_file(struct fast_index* fi, const char* file_name){
 
 static int simple_next(struct simple_index* si, struct abs_storage* as, struct simple_index** si_next_ptr){
 	uint8_t* value;
-	const uint8_t* ptr;
 	uint64_t iter1;
-	uint32_t iter2;
+	uint64_t iter2;
 	struct simple_index* si_next;
 	uint16_t hash1;
 	uint16_t hash2;
@@ -75,7 +74,6 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 	si_next = *si_next_ptr;
 	if (si_next == NULL){
 		if ((status = simple_index_create(&si_next, si->size + 1))){
-			fprintf(stderr, "[-] in %s, unable to create simple index\n", __func__);
 			return status;
 		}
 		*si_next_ptr = si_next;
@@ -85,9 +83,9 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 
 	for (iter1 = 0; simple_index_get_cpy(si, value, &iter1); iter1 ++){
 		hash1 = simple_index_hash_next(si, simple_index_iter_get_hash(iter1), value);
-		for (iter2 = 0; simple_index_get_hash(si, value + 1, hash1, &iter2); iter2 ++){
+		for (iter2 = simple_index_iter_init(hash1, 0); simple_index_get_masked_cpy(si, value + 1, &iter2); iter2 ++){
 			hash2 = simple_index_hash_increase(si, simple_index_iter_get_hash(iter1), value);
-			if ((status = simple_index_insert_hash(si_next, value, hash2))){
+			if ((status = simple_index_insert_hash(si_next, value, hash2, simple_index_iter_get_item(si, iter1), simple_index_iter_get_item(si, iter2)))){
 				return status;
 			}
 		}
@@ -99,15 +97,7 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 		return status;
 	}
 
-	// TODO: remove. This is too expensive.
-	for (iter1 = 0; simple_index_get(si_next, &ptr, &iter1); iter1 ++){
-		hash1 = simple_index_hash_decrease(si_next, simple_index_iter_get_hash(iter1), ptr);
-		simple_index_compare_hash(si, ptr, hash1);
-		hash1 = simple_index_hash_next(si, hash1, ptr);
-		simple_index_compare_hash(si, ptr + 1, hash1);
-	}
-
-	simple_index_remove_hit(si);
+	simple_index_remove(si, STATUS_HIT);
 
 	return 0;
 }
@@ -198,6 +188,7 @@ static int create(struct gory_sewer_knob* file_gsk, unsigned int flags){
 
 	for (si_index = 0; si_buffer[si_index]->nb_item; si_index = (si_index + 1) & 0x1){
 		if (si_buffer[si_index]->size > STOP){
+			log_info(flags, "reached max pattern size: %u", STOP)
 			simple_dump(si_buffer[si_index]);
 			break;
 		}

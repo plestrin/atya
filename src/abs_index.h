@@ -33,6 +33,7 @@ struct abs_index {
 
 	uint64_t (*index_remove_hit)(union union_index* ui);
 	uint64_t (*index_remove_nohit)(union union_index* ui);
+	uint64_t (*index_remove_nohitpro)(union union_index* ui);
 
 	void (*index_clean)(union union_index* ui);
 };
@@ -62,6 +63,10 @@ static inline uint64_t abs_index_remove_hit(struct abs_index* ai){
 
 static inline uint64_t abs_index_remove_nohit(struct abs_index* ai){
 	return ai->index_remove_nohit(&ai->ui);
+}
+
+static inline uint64_t abs_index_remove_nohitpro(struct abs_index* ai){
+	return ai->index_remove_nohitpro(&ai->ui);
 }
 
 static inline void abs_index_clean(struct abs_index* ai){

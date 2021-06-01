@@ -22,11 +22,15 @@ static uint64_t si_compare_buffer(union union_index* ui, const uint8_t* buffer, 
 }
 
 static uint64_t si_remove_hit(union union_index* ui){
-	return simple_index_remove_hit(ui->asi.si);
+	return simple_index_remove(ui->asi.si, STATUS_HIT);
 }
 
 static uint64_t si_remove_nohit(union union_index* ui){
-	return simple_index_remove_nohit(ui->asi.si);
+	return simple_index_remove(ui->asi.si, STATUS_NONE);
+}
+
+static uint64_t si_remove_nohitpro(union union_index* ui){
+	return simple_index_remove(ui->asi.si, STATUS_NONE | STATUS_PRO);
 }
 
 static void si_clean(union union_index* ui){
@@ -45,6 +49,7 @@ void abs_index_init_simple(struct abs_index* ai, struct simple_index* si){
 
 	ai->index_remove_hit = si_remove_hit;
 	ai->index_remove_nohit = si_remove_nohit;
+	ai->index_remove_nohitpro = si_remove_nohitpro;
 
 	ai->index_clean = si_clean;
 }
@@ -89,6 +94,7 @@ void abs_index_init_fast(struct abs_index* ai, struct fast_index* fi){
 
 	ai->index_remove_hit = fi_remove_hit;
 	ai->index_remove_nohit = fi_remove_nohit;
+	ai->index_remove_nohitpro = fi_remove_nohit;
 
 	ai->index_clean = fi_clean;
 }

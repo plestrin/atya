@@ -7,9 +7,20 @@
 
 #include "hash.h"
 
+#define STATUS_NONE 0
+#define STATUS_HIT 1
+#define STATUS_PRO 2
+
+struct __attribute__((__packed__)) simple_entry_item {
+	struct simple_entry_item* lo;
+	struct simple_entry_item* hi;
+	uint8_t status;
+	uint8_t data[];
+};
+
 struct simple_entry {
 	uint32_t nb_alloc;
-	uint32_t nb_used;
+	uint32_t nb_item;
 };
 
 struct simple_index {
@@ -42,33 +53,37 @@ static inline uint16_t simple_index_hash_increase(struct simple_index* si, uint1
 	return hash_push(hash, value[si->size - 1]);
 }
 
-int simple_index_insert_hash(struct simple_index* si, const uint8_t* value, uint16_t hash);
+int simple_index_insert_hash(struct simple_index* si, const uint8_t* value, uint16_t hash, struct simple_entry_item* lo, struct simple_entry_item* hi);
 
 static inline int simple_index_insert(struct simple_index* si, const uint8_t* value){
-	return simple_index_insert_hash(si, value, simple_index_hash_init(si, value));
+	return simple_index_insert_hash(si, value, simple_index_hash_init(si, value), NULL, NULL);
 }
 
 uint64_t simple_index_compare_hash(struct simple_index* si, const uint8_t* value, uint16_t hash);
 
 uint64_t simple_index_compare_buffer(struct simple_index* si, const uint8_t* buffer, size_t size);
 
+static inline uint64_t simple_index_iter_init(uint16_t hash, uint32_t item_idx) {
+	return (uint64_t)item_idx | ((uint64_t)hash << 32);
+}
+
+static inline uint16_t simple_index_iter_get_hash(uint64_t iter){
+	return iter >> 32;
+}
+
+static inline uint32_t simple_index_iter_get_item_idx(uint64_t iter){
+	return  iter;
+}
+
+struct simple_entry_item* simple_index_iter_get_item(struct simple_index* si, uint64_t iter);
+
 int simple_index_get(struct simple_index* si, const uint8_t** value_ptr, uint64_t* iter);
 
 int simple_index_get_cpy(struct simple_index* si, uint8_t* value, uint64_t* iter);
 
-#define simple_index_iter_get_hash(iter) ((iter >> 32) & 0xffff)
-
-int simple_index_get_hash(struct simple_index* si, uint8_t* value, uint16_t hash, uint32_t* iter);
+int simple_index_get_masked_cpy(struct simple_index* si, uint8_t* value, uint64_t* iter);
 
 uint64_t simple_index_remove(struct simple_index* si, uint8_t sel);
-
-static inline uint64_t simple_index_remove_hit(struct simple_index* si){
-	return simple_index_remove(si, 1);
-}
-
-static inline uint64_t simple_index_remove_nohit(struct simple_index* si){
-	return simple_index_remove(si, 0);
-}
 
 void simple_index_clean(struct simple_index* si);
 

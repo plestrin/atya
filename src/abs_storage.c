@@ -208,7 +208,13 @@ int abs_storage_intersect(struct abs_storage* as, struct abs_index* ai, uint64_t
 
 		new_size += abs_storage_file_get_mem_size(as->asf_buffer + i);
 
-		if (!abs_index_remove_nohit(ai)){
+		if (i + 1 < as->nb_file){
+			if (!abs_index_remove_nohit(ai)){
+				as->size = old_size;
+				return 0;
+			}
+		}
+		else if (!abs_index_remove_nohitpro(ai)){
 			as->size = old_size;
 			return 0;
 		}
