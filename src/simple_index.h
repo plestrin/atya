@@ -72,7 +72,7 @@ static inline uint16_t simple_index_iter_get_hash(uint64_t iter){
 }
 
 static inline uint32_t simple_index_iter_get_item_idx(uint64_t iter){
-	return  iter;
+	return iter;
 }
 
 struct simple_entry_item* simple_index_iter_get_item(struct simple_index* si, uint64_t iter);

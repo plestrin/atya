@@ -41,8 +41,6 @@ static int abs_storage_init_skimming(struct abs_storage_file* asf){
 
 	asf->flags |= ABS_STORAGE_FILE_FLAG_SK;
 
-	fprintf(stderr, "[+] skimming is active for file: %s\n", asf->path);
-
 	return 0;
 }
 

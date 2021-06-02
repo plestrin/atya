@@ -31,11 +31,8 @@ struct abs_index {
 
 	uint64_t (*index_compare_buffer)(union union_index* ui, const uint8_t* buffer, size_t size);
 
-	uint64_t (*index_remove_hit)(union union_index* ui);
 	uint64_t (*index_remove_nohit)(union union_index* ui);
 	uint64_t (*index_remove_nohitpro)(union union_index* ui);
-
-	void (*index_clean)(union union_index* ui);
 };
 
 void abs_index_init_simple(struct abs_index* ai, struct simple_index* si);
@@ -57,20 +54,12 @@ static inline uint64_t abs_index_compare_buffer(struct abs_index* ai, const uint
 	return ai->index_compare_buffer(&ai->ui, buffer, size);
 }
 
-static inline uint64_t abs_index_remove_hit(struct abs_index* ai){
-	return ai->index_remove_hit(&ai->ui);
-}
-
 static inline uint64_t abs_index_remove_nohit(struct abs_index* ai){
 	return ai->index_remove_nohit(&ai->ui);
 }
 
 static inline uint64_t abs_index_remove_nohitpro(struct abs_index* ai){
 	return ai->index_remove_nohitpro(&ai->ui);
-}
-
-static inline void abs_index_clean(struct abs_index* ai){
-	ai->index_clean(&ai->ui);
 }
 
 #endif

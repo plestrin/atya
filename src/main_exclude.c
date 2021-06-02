@@ -12,7 +12,7 @@ static int last_exclude_files(struct last_index* li, struct gory_sewer_knob* gsk
 	char* file_path;
 	int status = 0;
 
-	for (file_path = gory_sewer_first(gsk_files); file_path != NULL; file_path = gory_sewer_next(gsk_files)){
+	for (file_path = gory_sewer_first(gsk_files); file_path != NULL && li->nb_item; file_path = gory_sewer_next(gsk_files)){
 		if ((status = last_index_exclude_file(li, file_path))){
 			fprintf(stderr, "[-] in %s, unable to exclude file: %s\n", __func__, file_path);
 		}
@@ -62,21 +62,23 @@ static int exclude(struct gory_sewer_knob* file_gsk, unsigned int flags){
 		}
 	}
 
-	log_info(flags, "%lu pattern(s) read, %lu <= size <= %lu", pattern_gsk->nb_item, size_min, size_max);
+	if (pattern_gsk->nb_item){
+		log_info(flags, "%lu pattern(s) read, %lu <= size <= %lu", pattern_gsk->nb_item, size_min, size_max);
 
-	last_index_init(&li, size_min);
+		last_index_init(&li, size_min);
 
-	for (pattern = gs_sl_first(pattern_gsk, &it_size); pattern != NULL; pattern = gs_sl_next(pattern_gsk, &it_size)){
-		if ((status = last_index_push(&li, pattern, it_size))){
-			fprintf(stderr, "[-] in %s, unable to push data to last index\n", __func__);
+		for (pattern = gs_sl_first(pattern_gsk, &it_size); pattern != NULL; pattern = gs_sl_next(pattern_gsk, &it_size)){
+			if ((status = last_index_push(&li, pattern, it_size))){
+				fprintf(stderr, "[-] in %s, unable to push data to last index\n", __func__);
+			}
 		}
+
+		last_exclude_files(&li, file_gsk);
+
+		log_info(flags, "%lu pattern(s) remaining", li.nb_item);
+
+		last_index_dump_and_clean(&li, stdout);
 	}
-
-	last_exclude_files(&li, file_gsk);
-
-	log_info(flags, "%lu pattern(s) remaining", li.nb_item);
-
-	last_index_dump_and_clean(&li, stdout);
 
 	gory_sewer_delete(pattern_gsk);
 

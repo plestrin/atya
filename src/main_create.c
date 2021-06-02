@@ -11,7 +11,7 @@
 #include "gory_sewer.h"
 #include "utile.h"
 
-static void simple_dump(struct simple_index* si){
+static uint64_t simple_dump(struct simple_index* si){
 	const uint8_t* ptr;
 	uint64_t iter;
 	uint64_t cnt;
@@ -23,9 +23,7 @@ static void simple_dump(struct simple_index* si){
 		fwrite(ptr, si->size, 1, stdout);
 	}
 
-	if (cnt){
-		fprintf(stderr, "[+] %5lu patterns of size %4zu\n", cnt, si->size);
-	}
+	return cnt;
 }
 
 static uint8_t chunk[0x10000];
@@ -167,11 +165,25 @@ static struct simple_index* simple_first(struct abs_storage* as, struct gory_sew
 #define START 6
 #define STOP 16384
 
+static void print_status(unsigned int flags, uint64_t pattern_cnt, uint64_t item_cnt, size_t size){
+	if (flags & CMD_FLAG_VERBOSE && !((size - START) % 16)){
+		fprintf(stderr, "\r%lu pattern(s) found, index size: %lu @ iteration %-10zu", pattern_cnt, item_cnt, size);
+		fflush(stderr);
+	}
+}
+
+static void print_status_final(unsigned int flags, uint64_t pattern_cnt, uint64_t item_cnt, size_t size){
+	if (flags & CMD_FLAG_VERBOSE){
+		fprintf(stderr, "\r%lu pattern(s) found, index size: %lu @ iteration %-10zu\n", pattern_cnt, item_cnt, size);
+	}
+}
+
 static int create(struct gory_sewer_knob* file_gsk, unsigned int flags){
 	struct simple_index* si_buffer[2] = {NULL, NULL};
 	int si_index;
 	struct abs_storage as;
 	int status = 0;
+	uint64_t cnt = 0;
 
 	if ((status = abs_storage_init(&as, file_gsk))){
 		fprintf(stderr, "[-] in %s, unable to initialize abs storage\n", __func__);
@@ -184,14 +196,14 @@ static int create(struct gory_sewer_knob* file_gsk, unsigned int flags){
 		goto exit;
 	}
 
-	log_info(flags, "starting with %lu pattern(s) of size %zu in inc file(s)", si_buffer[0]->nb_item, si_buffer[0]->size);
-
 	for (si_index = 0; si_buffer[si_index]->nb_item; si_index = (si_index + 1) & 0x1){
 		if (si_buffer[si_index]->size > STOP){
 			log_info(flags, "reached max pattern size: %u", STOP)
-			simple_dump(si_buffer[si_index]);
+			cnt += simple_dump(si_buffer[si_index]);
 			break;
 		}
+
+		print_status(flags, cnt, si_buffer[si_index]->nb_item, si_buffer[si_index]->size);
 
 		if ((status = simple_next(si_buffer[si_index], &as, si_buffer + ((si_index + 1) & 0x1)))){
 			fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, si_buffer[si_index]->size + 1);
@@ -202,9 +214,11 @@ static int create(struct gory_sewer_knob* file_gsk, unsigned int flags){
 			continue;
 		}
 
-		simple_dump(si_buffer[si_index]);
+		cnt += simple_dump(si_buffer[si_index]);
 		simple_index_clean(si_buffer[si_index]);
 	}
+
+	print_status_final(flags, cnt, si_buffer[si_index]->nb_item, si_buffer[si_index]->size);
 
 	exit:
 
