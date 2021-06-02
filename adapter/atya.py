@@ -11,3 +11,9 @@ def atya_iter(stream=None):
 			yield stream.read(size)
 		else:
 			break
+
+def atya_write(pattern, stream=None):
+	if stream is None:
+		stream = sys.stdout.buffer
+	stream.write(struct.pack('<Q', len(pattern)))
+	stream.write(pattern)
