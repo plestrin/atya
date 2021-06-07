@@ -93,12 +93,16 @@ static char* get_file_name(char* path){
 	return path;
 }
 
+static void print_usage(char* argv0){
+	fprintf(stderr, "[-] usage: %s [-h | --help] [-v | --verbose] file [file ...]\n", get_file_name(argv0));
+}
+
 int parse_cmd_line(int argc, char** argv, struct gory_sewer_knob** file_gsk_ptr, unsigned int* flags_ptr){
 	char path[4096];
 	int i;
 
 	if (argc < 2){
-		fprintf(stderr, "[-] usage: %s [-v | --verbose] file [file ...]\n", get_file_name(argv[0]));
+		print_usage(argv[0]);
 		return EINVAL;
 	}
 
@@ -110,6 +114,12 @@ int parse_cmd_line(int argc, char** argv, struct gory_sewer_knob** file_gsk_ptr,
 	}
 
 	for (i = 1; i < argc; i++){
+		if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")){
+			print_usage(argv[0]);
+			*flags_ptr = *flags_ptr | CMD_FLAG_NOOP;
+			continue;
+		}
+
 		if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--verbose")){
 			*flags_ptr = *flags_ptr | CMD_FLAG_VERBOSE;
 			continue;

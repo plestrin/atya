@@ -243,8 +243,10 @@ int main(int argc, char** argv){
 		return EXIT_FAILURE;
 	}
 
-	if (create(file_gsk, flags)){
-		status = EXIT_FAILURE;
+	if (!(flags & CMD_FLAG_NOOP)){
+		if (create(file_gsk, flags)){
+			status = EXIT_FAILURE;
+		}
 	}
 
 	gory_sewer_delete(file_gsk);

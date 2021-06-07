@@ -7,6 +7,7 @@
 #include "gory_sewer.h"
 
 #define CMD_FLAG_VERBOSE 0x01
+#define CMD_FLAG_NOOP 0x02
 
 int parse_cmd_line(int argc, char** argv, struct gory_sewer_knob** file_gsk_ptr, unsigned int* flags_ptr);
 
