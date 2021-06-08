@@ -56,7 +56,7 @@ static uint64_t simple_entry_compare(struct simple_entry* se, const uint8_t* val
 
 	for (i = 0; i < se->nb_item; i++){
 		item = simple_entry_get_item(se, i, size);
-		if (!memcmp(item + 1, value, size)){
+		if (!memcmp(item->data, value, size)){
 			item->status |= STATUS_HIT;
 			return 1;
 		}
@@ -97,6 +97,24 @@ static uint32_t simple_entry_remove(struct simple_entry* se, size_t size, uint8_
 	}
 
 	return j;
+}
+
+static uint32_t simple_entry_dump(struct simple_entry* se, size_t size, uint8_t sel, FILE* stream){
+	uint32_t i;
+	uint32_t cnt;
+	uint64_t size_;
+	struct simple_entry_item* item;
+
+	size_ = size;
+	for (i = 0, cnt = 0; i < se->nb_item; i++){
+		item = simple_entry_get_item(se, i, size);
+		if ((item->status & STATUS_HIT) == (sel & STATUS_HIT)){
+			fwrite(&size_, sizeof size_, 1, stream);
+			fwrite(item->data, size, 1, stream);
+		}
+	}
+
+	return cnt;
 }
 
 static const uint8_t* simple_entry_get_item_data(struct simple_entry* se, uint32_t idx, size_t size){
@@ -239,6 +257,22 @@ uint64_t simple_index_remove(struct simple_index* si, uint8_t sel){
 		}
 	}
 	si->nb_item = cnt;
+
+	return cnt;
+}
+
+uint64_t simple_index_dump_and_clean(struct simple_index* si, uint8_t sel, FILE* stream){
+	uint32_t i;
+	uint64_t cnt;
+
+	for (i = 0, cnt = 0; i < 0x10000; i++){
+		if (si->index[i] != NULL){
+			cnt += simple_entry_dump(si->index[i], si->size, sel, stream);
+			free(si->index[i]);
+			si->index[i] = NULL;
+		}
+	}
+	si->nb_item = 0;
 
 	return cnt;
 }

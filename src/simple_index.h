@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "hash.h"
@@ -84,6 +85,8 @@ int simple_index_get_cpy(struct simple_index* si, uint8_t* value, uint64_t* iter
 int simple_index_get_masked_cpy(struct simple_index* si, uint8_t* value, uint64_t* iter);
 
 uint64_t simple_index_remove(struct simple_index* si, uint8_t sel);
+
+uint64_t simple_index_dump_and_clean(struct simple_index* si, uint8_t sel, FILE* stream);
 
 void simple_index_clean(struct simple_index* si);
 

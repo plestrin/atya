@@ -179,12 +179,12 @@ int last_index_exclude_file(struct last_index* li, const char* file_name){
 	return 0;
 }
 
-void last_index_dump_and_clean(struct last_index* li, FILE* steam){
+void last_index_dump_and_clean(struct last_index* li, FILE* stream){
 	uint32_t i;
 
 	for (i = 0; i < 0x10000; i++){
 		if (li->index[i] != NULL){
-			last_entry_dump(li->index[i], steam);
+			last_entry_dump(li->index[i], stream);
 			free(li->index[i]);
 			li->index[i] = NULL;
 		}

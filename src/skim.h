@@ -37,7 +37,6 @@ static inline void skim_delete_data(struct skim_iter* ski){
 	simple_set_delete_item(&ski->sk->ss_index, &ski->ssi);
 }
 
-
 void skim_clean(struct skim* sk);
 void skim_delete(struct skim* sk);
 

@@ -49,8 +49,6 @@ int abs_storage_init(struct abs_storage* as, struct gory_sewer_knob* gsk_path){
 	uint64_t i;
 	struct stat statbuf;
 
-	as->gsk_path = gsk_path;
-
 	if (!gsk_path->nb_item){
 		fprintf(stderr, "[-] in %s, GSK is empty\n", __func__);
 		return EINVAL;

@@ -11,21 +11,6 @@
 #include "gory_sewer.h"
 #include "utile.h"
 
-static uint64_t simple_dump(struct simple_index* si){
-	const uint8_t* ptr;
-	uint64_t iter;
-	uint64_t cnt;
-	uint64_t size;
-
-	size = si->size;
-	for (iter = 0, cnt = 0; simple_index_get(si, &ptr, &iter); iter ++, cnt ++){
-		fwrite(&size, sizeof size, 1, stdout);
-		fwrite(ptr, si->size, 1, stdout);
-	}
-
-	return cnt;
-}
-
 static uint8_t chunk[0x10000];
 
 static int fast_insert_file(struct fast_index* fi, const char* file_name){
@@ -94,8 +79,6 @@ static int simple_next(struct simple_index* si, struct abs_storage* as, struct s
 	if ((status = abs_storage_intersect(as, &ai_next, 0))){
 		return status;
 	}
-
-	simple_index_remove(si, STATUS_HIT);
 
 	return 0;
 }
@@ -199,7 +182,7 @@ static int create(struct gory_sewer_knob* file_gsk, unsigned int flags){
 	for (si_index = 0; si_buffer[si_index]->nb_item; si_index = (si_index + 1) & 0x1){
 		if (si_buffer[si_index]->size > STOP){
 			log_info(flags, "reached max pattern size: %u", STOP)
-			cnt += simple_dump(si_buffer[si_index]);
+			cnt += simple_index_dump_and_clean(si_buffer[si_index], STATUS_NONE, stdout);
 			break;
 		}
 
@@ -210,12 +193,7 @@ static int create(struct gory_sewer_knob* file_gsk, unsigned int flags){
 			break;
 		}
 
-		if (!si_buffer[si_index]->nb_item){
-			continue;
-		}
-
-		cnt += simple_dump(si_buffer[si_index]);
-		simple_index_clean(si_buffer[si_index]);
+		cnt += simple_index_dump_and_clean(si_buffer[si_index], STATUS_NONE, stdout);
 	}
 
 	print_status_final(flags, cnt, si_buffer[si_index]->nb_item, si_buffer[si_index]->size);
