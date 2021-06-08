@@ -111,6 +111,7 @@ static uint32_t simple_entry_dump(struct simple_entry* se, size_t size, uint8_t 
 		if ((item->status & STATUS_HIT) == (sel & STATUS_HIT)){
 			fwrite(&size_, sizeof size_, 1, stream);
 			fwrite(item->data, size, 1, stream);
+			cnt += 1;
 		}
 	}
 
