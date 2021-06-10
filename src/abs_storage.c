@@ -10,15 +10,7 @@
 
 #define ABS_STORAGE_MAX_SIZE 0x1000000
 
-static size_t abs_storage_file_get_mem_size(struct abs_storage_file* asf){
-	if (asf->flags & ABS_STORAGE_FILE_FLAG_SK){
-		return asf->sk.size;
-	}
-
-	return 0;
-}
-
-static int abs_storage_init_skimming(struct abs_storage_file* asf){
+static int abs_storage_file_init_skimming(struct abs_storage_file* asf){
 	uint8_t* data;
 	size_t size;
 	int status;
@@ -85,13 +77,13 @@ int abs_storage_init(struct abs_storage* as, struct gory_sewer_knob* gsk_path){
 
 static uint8_t chunk[0x10000];
 
-static int compare_file(struct abs_index* ai, const char* file_name){
+static int compare_file(struct simple_index* si, const char* file_name){
 	FILE* handle;
 	int status;
 	size_t rd_sz;
 	size_t ol_sz;
 
-	ol_sz = abs_index_get_size(ai) - 1;
+	ol_sz = si->size - 1;
 
 	if ((handle = fopen(file_name, "rb")) == NULL){
 		status = errno;
@@ -101,7 +93,7 @@ static int compare_file(struct abs_index* ai, const char* file_name){
 
 	rd_sz = fread(chunk, 1, sizeof chunk, handle);
 	for ( ; ; ){
-		abs_index_compare_buffer(ai, chunk, rd_sz);
+		simple_index_compare_buffer(si, chunk, rd_sz);
 		memmove(chunk, chunk + rd_sz - ol_sz, ol_sz);
 		rd_sz = fread(chunk + ol_sz, 1, (sizeof chunk) - ol_sz, handle);
 		if (!rd_sz){
@@ -115,7 +107,58 @@ static int compare_file(struct abs_index* ai, const char* file_name){
 	return 0;
 }
 
-static void compare_skim(struct abs_index* ai, struct skim* sk){
+
+static void create_skim(struct skim* sk, struct simple_index* si){
+	struct skim_iter ski = SKIM_ITER_INIT(sk);
+	uint8_t* data;
+	size_t off;
+	size_t size;
+	size_t i;
+	uint16_t hash;
+
+	for (; !skim_iter_get(&ski, &off, &size); ){
+		if (size < si->size){
+			skim_delete_data(&ski);
+			continue;
+		}
+
+		data = sk->data + off;
+
+		for (i = 0, hash = simple_index_hash_init(si, data); ; hash = simple_index_hash_next(si, hash, data + i - 1)){
+			if (simple_index_insert_hash(si, data + i, hash, NULL, NULL)){
+				fprintf(stderr, "[-] in %s, unable to insert item in simple index. Results may be incorrect\n", __func__);
+			}
+
+			if (++i > size - si->size){
+				break;
+			}
+		}
+
+		skim_iter_next(&ski);
+	}
+}
+int abs_storage_create_head(struct abs_storage* as, struct simple_index* si){
+	if (!(as->asf_buffer[0].flags & ABS_STORAGE_FILE_FLAG_SK)){
+		if (as->asf_buffer[0].size <= ABS_STORAGE_MAX_SIZE && (ABS_STORAGE_MAX_SIZE - as->asf_buffer[0].size) >= as->size){
+			if (!abs_storage_file_init_skimming(as->asf_buffer)){
+				as->size += as->asf_buffer[0].sk.size;
+			}
+		}
+	}
+
+	if (!(as->asf_buffer[0].flags & ABS_STORAGE_FILE_FLAG_SK)){
+		fprintf(stderr, "[-] in %s, create_file is not implemented\n", __func__);
+		return EINVAL;
+	}
+
+	as->size -= as->asf_buffer[0].sk.size;
+	create_skim(&as->asf_buffer[0].sk, si);
+	as->size += as->asf_buffer[0].sk.size;
+
+	return 0;
+}
+
+static void compare_skim(struct skim* sk, struct simple_index* si){
 	struct skim_iter ski = SKIM_ITER_INIT(sk);
 	uint8_t* data;
 	size_t off;
@@ -123,21 +166,18 @@ static void compare_skim(struct abs_index* ai, struct skim* sk){
 	size_t i;
 	int matched;
 	size_t start;
-	size_t id_sz;
-	uint64_t cmp_res;
-
-	id_sz = abs_index_get_size(ai);
+	uint16_t hash;
 
 	for (; !skim_iter_get(&ski, &off, &size); ){
-		if (size < id_sz){
+		if (size < si->size){
 			skim_delete_data(&ski);
 			continue;
 		}
 
 		data = sk->data + off;
 
-		for (i = 0, cmp_res = abs_index_compare_init(ai, data), matched = 0; ; cmp_res = abs_index_compare_next(ai, data + i - 1)){
-			if (cmp_res){
+		for (i = 0, hash = simple_index_hash_init(si, data), matched = 0; ; hash = simple_index_hash_next(si, hash, data + i - 1)){
+			if (simple_index_compare_hash(si, data + i, hash, STATUS_HIT)){
 				if (!matched){
 					start = i;
 					matched = 1;
@@ -148,7 +188,7 @@ static void compare_skim(struct abs_index* ai, struct skim* sk){
 					matched = 0;
 				}
 				else {
-					if (i + 1 <= size - id_sz){
+					if (i + 1 <= size - si->size){
 						if (skim_add_data(sk, off + i + 1, size - (i + 1))){
 							fprintf(stderr, "[-] in %s, unable to add data to skim. Results may be incorrect\n", __func__);
 						}
@@ -158,7 +198,7 @@ static void compare_skim(struct abs_index* ai, struct skim* sk){
 				}
 			}
 
-			if (++i > size - id_sz){
+			if (++i > size - si->size){
 				break;
 			}
 		}
@@ -168,7 +208,7 @@ static void compare_skim(struct abs_index* ai, struct skim* sk){
 			continue;
 		}
 
-		if (skim_resize_data(&ski, off + start, i - start + id_sz - 1)){
+		if (skim_resize_data(&ski, off + start, i - start + si->size - 1)){
 			fprintf(stderr, "[-] in %s, unable to resize data in skim\n", __func__);
 		}
 
@@ -176,47 +216,122 @@ static void compare_skim(struct abs_index* ai, struct skim* sk){
 	}
 }
 
-int abs_storage_intersect(struct abs_storage* as, struct abs_index* ai, uint64_t offset){
+int abs_storage_intersect_tail(struct abs_storage* as, struct simple_index* si){
 	uint64_t i;
-	uint64_t old_size;
-	uint64_t new_size;
 	int status;
 
-	old_size = as->size;
-	new_size = 0;
-
-	for (i = offset; i < as->nb_file; i ++){
+	for (i = 1; i < as->nb_file && si->nb_item; i ++){
 		if (!(as->asf_buffer[i].flags & ABS_STORAGE_FILE_FLAG_SK)){
-			if (as->asf_buffer[i].size <= ABS_STORAGE_MAX_SIZE && (ABS_STORAGE_MAX_SIZE - as->asf_buffer[i].size) >= old_size){
-				if (!abs_storage_init_skimming(as->asf_buffer + i)){
-					old_size += as->asf_buffer[i].sk.size;
+			if (as->asf_buffer[i].size <= ABS_STORAGE_MAX_SIZE && (ABS_STORAGE_MAX_SIZE - as->asf_buffer[i].size) >= as->size){
+				if (!abs_storage_file_init_skimming(as->asf_buffer + i)){
+					as->size += as->asf_buffer[i].sk.size;
 				}
 			}
 		}
 
 		if (as->asf_buffer[i].flags & ABS_STORAGE_FILE_FLAG_SK){
-			compare_skim(ai, &as->asf_buffer[i].sk);
+			as->size -= as->asf_buffer[i].sk.size;
+			compare_skim(&as->asf_buffer[i].sk, si);
+			as->size += as->asf_buffer[i].sk.size;
 		}
-		else if ((status = compare_file(ai, as->asf_buffer[i].path))){
+		else if ((status = compare_file(si, as->asf_buffer[i].path))){
 			fprintf(stderr, "[-] in %s, unable to compare to file: %s\n", __func__, as->asf_buffer[i].path);
 			return status;
 		}
 
-		new_size += abs_storage_file_get_mem_size(as->asf_buffer + i);
-
 		if (i + 1 < as->nb_file){
-			if (!abs_index_remove_nohit(ai)){
-				as->size = old_size;
-				return 0;
-			}
+			simple_index_remove(si, STATUS_NONE);
 		}
-		else if (!abs_index_remove_nohitpro(ai)){
-			as->size = old_size;
-			return 0;
+		else {
+			simple_index_remove(si, STATUS_NONE | STATUS_PRO);
 		}
 	}
 
-	as->size = new_size;
+	return 0;
+}
+
+static void derive_skim(struct skim* sk, struct simple_index* si_prev, struct simple_index* si_next){
+	struct skim_iter ski = SKIM_ITER_INIT(sk);
+	uint8_t* data;
+	size_t off;
+	size_t size;
+	size_t i;
+	int matched;
+	size_t start;
+	uint16_t hash_lo;
+	uint16_t hash_hi;
+	struct simple_entry_item *sei_lo;
+	struct simple_entry_item *sei_hi;
+
+	for (; !skim_iter_get(&ski, &off, &size); ){
+		if (size < si_next->size){
+			skim_delete_data(&ski);
+			continue;
+		}
+
+		data = sk->data + off;
+
+		for (i = 0, hash_lo = simple_index_hash_init(si_prev, data), hash_hi = simple_index_hash_next(si_prev, hash_lo, data), sei_lo = simple_index_compare_hash(si_prev, data, hash_lo, STATUS_NONE), matched = 0; ; hash_lo = hash_hi, hash_hi = simple_index_hash_next(si_prev, hash_hi, data + i), sei_lo = sei_hi){
+			sei_hi = simple_index_compare_hash(si_prev, data + i + 1, hash_hi, STATUS_NONE);
+			if (sei_lo != NULL && sei_hi != NULL){
+				if (simple_index_insert_hash(si_next, data + i, simple_index_hash_increase(si_prev, hash_lo, data + i), sei_lo, sei_hi)){
+					fprintf(stderr, "[-] in %s, unable to insert item in simple index. Results may be incorrect\n", __func__);
+				}
+				if (!matched){
+					start = i;
+					matched = 1;
+				}
+			}
+			else if (matched){
+				if (start + 1 == i){
+					matched = 0;
+				}
+				else {
+					if (i + 1 <= size - si_next->size){
+						if (skim_add_data(sk, off + i + 1, size - (i + 1))){
+							fprintf(stderr, "[-] in %s, unable to add data to skim. Results may be incorrect\n", __func__);
+						}
+					}
+
+					break;
+				}
+			}
+
+			if (++i > size - si_next->size){
+				break;
+			}
+		}
+
+		if (!matched){
+			skim_delete_data(&ski);
+			continue;
+		}
+
+		if (skim_resize_data(&ski, off + start, i - start + si_next->size - 1)){
+			fprintf(stderr, "[-] in %s, unable to resize data in skim\n", __func__);
+		}
+
+		skim_iter_next(&ski);
+	}
+}
+
+int abs_storage_derive_head(struct abs_storage* as, struct simple_index* si_prev, struct simple_index* si_next){
+	if (!(as->asf_buffer[0].flags & ABS_STORAGE_FILE_FLAG_SK)){
+		if (as->asf_buffer[0].size <= ABS_STORAGE_MAX_SIZE && (ABS_STORAGE_MAX_SIZE - as->asf_buffer[0].size) >= as->size){
+			if (!abs_storage_file_init_skimming(as->asf_buffer)){
+				as->size += as->asf_buffer[0].sk.size;
+			}
+		}
+	}
+
+	if (!(as->asf_buffer[0].flags & ABS_STORAGE_FILE_FLAG_SK)){
+		fprintf(stderr, "[-] in %s, derive_file is not implemented\n", __func__);
+		return EINVAL;
+	}
+
+	as->size -= as->asf_buffer[0].sk.size;
+	derive_skim(&as->asf_buffer[0].sk, si_prev, si_next);
+	as->size += as->asf_buffer[0].sk.size;
 
 	return 0;
 }
@@ -229,5 +344,6 @@ void abs_storage_clean(struct abs_storage* as){
 			skim_clean(&as->asf_buffer[i].sk);
 		}
 	}
+
 	free(as->asf_buffer);
 }

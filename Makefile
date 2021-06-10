@@ -7,7 +7,7 @@ all: build create exclude
 build:
 	mkdir -p build
 
-create: build/main_create.o build/gory_sewer.o build/utile.o build/fast_index.o build/simple_index.o build/hash.o build/abs_storage.o build/skim.o build/simple_set.o build/llist.o build/abs_index.o
+create: build/main_create.o build/gory_sewer.o build/utile.o build/simple_index.o build/hash.o build/abs_storage.o build/skim.o build/simple_set.o build/llist.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
 exclude: build/main_exclude.o build/gory_sewer.o build/utile.o build/last_index.o build/hash.o
