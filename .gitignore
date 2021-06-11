@@ -1,5 +1,4 @@
 build/*.o
 create
 exclude
-test_last_index
 adapter/__pycache__
