@@ -3,12 +3,14 @@
 #include <stdio.h>
 #include <errno.h>
 
+#include "stree.h"
 #include "simple_index.h"
+#include "reverse_index.h"
 #include "abs_storage.h"
 #include "gory_sewer.h"
 #include "utile.h"
 
-static int init(struct abs_storage* as, struct simple_index** si_ptr, size_t size){
+static int make_simple_index(struct abs_storage* as, struct simple_index** si_ptr, size_t size){
 	struct simple_index* si;
 	int status;
 
@@ -22,104 +24,88 @@ static int init(struct abs_storage* as, struct simple_index** si_ptr, size_t siz
 
 	si->size = size;
 
-	if ((status = abs_storage_create_head(as, si))){
+	if ((status = abs_storage_fill_simple_index_head(as, si))){
 		return status;
 	}
 
-	if ((status = abs_storage_intersect_tail(as, si))){
+	if ((status = abs_storage_intersect_simple_index_tail(as, si))){
 		return status;
 	}
 
 	return 0;
 }
 
-static int next(struct simple_index* si, struct abs_storage* as, struct simple_index** si_next_ptr){
-	struct simple_index* si_next;
+static int make_stree(struct abs_storage* as, struct stree* tree, size_t min_size){
+	struct simple_index* si;
 	int status;
 
-	si_next = *si_next_ptr;
-	if (si_next == NULL){
-		if ((si_next = simple_index_create(si->size + 1)) == NULL){
-			return ENOMEM;
+	if ((status = stree_init(tree))){
+		fprintf(stderr, "[-] in %s, unable to initialize suffix tree\n", __func__);
+		return status;
+	}
+
+	if ((status = make_simple_index(as, &si, min_size))){
+		return status;
+	}
+
+	if (!(status = abs_storage_fill_stree_head(as, tree, si))){
+		status = abs_storage_intersect_stree_tail(as, tree, si);
+	}
+
+	simple_index_delete(si);
+
+	return status;
+}
+
+static int dump_stree(struct stree* tree, size_t min_size){
+	struct stree_iterator sti;
+	int end;
+	struct reverse_index* ri;
+	int status;
+
+	if ((ri = reverse_index_create(min_size)) == NULL){
+		return ENOMEM;
+	}
+
+	for (end = stree_iterator_init(&sti, tree); !end; end = stree_iterator_next(&sti, tree)){
+		if ((status = reverse_index_append(ri, sti.ptr, sti.offset))){
+			fprintf(stderr, "[-] in %s, unable to append data to reverse index\n", __func__);
+			break;
 		}
-		*si_next_ptr = si_next;
 	}
 
-	si_next->size = si->size + 1;
+	stree_iterator_clean(&sti);
 
-	if ((status = abs_storage_derive_head(as, si, si_next))){
-		return status;
-	}
+	reverse_index_dump(ri, stdout);
 
-	if ((status = abs_storage_intersect_tail(as, si_next))){
-		return status;
-	}
+	reverse_index_delete(ri);
 
-	return 0;
+	return status;
 }
 
 #define START 6
-#define STOP 16384
 
-static void print_status(unsigned int flags, uint64_t pattern_cnt, uint64_t item_cnt, size_t size){
-	if (flags & CMD_FLAG_VERBOSE && !((size - START) % 24)){
-		fprintf(stderr, "\r%lu pattern(s) found, index size: %lu @ iteration %-10zu", pattern_cnt, item_cnt, size);
-		fflush(stderr);
-	}
-}
-
-static void print_status_final(unsigned int flags, uint64_t pattern_cnt, uint64_t item_cnt, size_t size){
-	if (flags & CMD_FLAG_VERBOSE){
-		fprintf(stderr, "\r%lu pattern(s) found, index size: %lu @ iteration %-10zu\n", pattern_cnt, item_cnt, size);
-	}
-}
-
-static int create(struct gory_sewer_knob* file_gsk, unsigned int flags){
-	struct simple_index* si_buffer[2] = {NULL, NULL};
-	int si_index;
+static int create(struct gory_sewer_knob* file_gsk){
 	struct abs_storage as;
 	int status;
-	uint64_t cnt = 0;
+	struct stree tree;
 
 	if ((status = abs_storage_init(&as, file_gsk))){
 		fprintf(stderr, "[-] in %s, unable to initialize abs storage\n", __func__);
 		return status;
 	}
 
-	if ((status = init(&as, si_buffer, START))){
-		fprintf(stderr, "[-] in %s, unable to create first simple index\n", __func__);
-		goto exit;
+	if ((status = make_stree(&as, &tree, START))){
+		fprintf(stderr, "[-] in %s, unable to make suffix tree\n", __func__);
+	}
+	else {
+		if ((status = dump_stree(&tree, START))){
+			fprintf(stderr, "[-] in %s, unable to dump suffix tree\n", __func__);
+		}
 	}
 
-	for (si_index = 0; si_buffer[si_index]->nb_item; si_index = (si_index + 1) & 0x1){
-		if (si_buffer[si_index]->size > STOP){
-			log_info(flags, "reached max pattern size: %u", STOP)
-			cnt += simple_index_dump_and_clean(si_buffer[si_index], STATUS_NONE, stdout);
-			break;
-		}
-
-		print_status(flags, cnt, si_buffer[si_index]->nb_item, si_buffer[si_index]->size);
-
-		if ((status = next(si_buffer[si_index], &as, si_buffer + ((si_index + 1) & 0x1)))){
-			fprintf(stderr, "[-] in %s, unable to create index of size %zu\n", __func__, si_buffer[si_index]->size + 1);
-			break;
-		}
-
-		cnt += simple_index_dump_and_clean(si_buffer[si_index], STATUS_NONE, stdout);
-	}
-
-	print_status_final(flags, cnt, si_buffer[si_index]->nb_item, si_buffer[si_index]->size);
-
-	exit:
-
+	stree_clean(&tree);
 	abs_storage_clean(&as);
-
-	if (si_buffer[0] != NULL){
-		simple_index_delete(si_buffer[0]);
-	}
-	if (si_buffer[1] != NULL){
-		simple_index_delete(si_buffer[1]);
-	}
 
 	return status;
 }
@@ -134,7 +120,7 @@ int main(int argc, char** argv){
 	}
 
 	if (!(flags & CMD_FLAG_NOOP)){
-		if (create(file_gsk, flags)){
+		if (create(file_gsk)){
 			status = EXIT_FAILURE;
 		}
 	}

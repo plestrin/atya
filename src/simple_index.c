@@ -8,7 +8,7 @@
 
 #define SIMPLE_INDEX_ALLOC_STEP 16
 
-static int simple_entry_insert(struct simple_entry** se_ptr, const uint8_t* ptr, struct simple_entry_item* lo, struct simple_entry_item* hi){
+static int simple_entry_insert(struct simple_entry** se_ptr, const uint8_t* ptr){
 	struct simple_entry* se;
 	struct simple_entry* new_se;
 
@@ -34,8 +34,6 @@ static int simple_entry_insert(struct simple_entry** se_ptr, const uint8_t* ptr,
 	}
 	se = *se_ptr;
 
-	se->items[se->nb_item].lo = lo;
-	se->items[se->nb_item].hi = hi;
 	se->items[se->nb_item].status = STATUS_NONE;
 	se->items[se->nb_item].ptr = ptr;
 	se->nb_item ++;
@@ -71,36 +69,10 @@ static uint32_t simple_entry_remove(struct simple_entry* se, uint8_t sel){
 
 			se->nb_item = j;
 		}
-
-		if (sel & STATUS_PRO){
-			if (se->items[i].lo != NULL){
-				se->items[i].lo->status |= se->items[i].status & STATUS_HIT;
-			}
-			if (se->items[i].hi != NULL){
-				se->items[i].hi->status |= se->items[i].status & STATUS_HIT;
-			}
-		}
 		se->items[i].status = STATUS_NONE;
 	}
 
 	return j;
-}
-
-static uint32_t simple_entry_dump(struct simple_entry* se, size_t size, uint8_t sel, FILE* stream){
-	uint32_t i;
-	uint32_t cnt;
-	uint64_t size_;
-
-	size_ = size;
-	for (i = 0, cnt = 0; i < se->nb_item; i++){
-		if ((se->items[i].status & STATUS_HIT) == (sel & STATUS_HIT)){
-			fwrite(&size_, sizeof size_, 1, stream);
-			fwrite(se->items[i].ptr, size, 1, stream);
-			cnt += 1;
-		}
-	}
-
-	return cnt;
 }
 
 struct simple_index* simple_index_create(size_t size){
@@ -116,11 +88,11 @@ struct simple_index* simple_index_create(size_t size){
 	return si;
 }
 
-int simple_index_insert_hash(struct simple_index* si, const uint8_t* ptr, uint16_t hash, struct simple_entry_item* lo, struct simple_entry_item* hi){
+int simple_index_insert_hash(struct simple_index* si, const uint8_t* ptr, uint16_t hash){
 	int status = 0;
 
 	if (si->index[hash] == NULL || simple_entry_compare(si->index[hash], ptr, si->size, 0) == NULL){
-		if (!(status = simple_entry_insert(si->index + hash, ptr, lo, hi))){
+		if (!(status = simple_entry_insert(si->index + hash, ptr))){
 			si->nb_item ++;
 		}
 	}
@@ -174,22 +146,6 @@ void simple_index_remove(struct simple_index* si, uint8_t sel){
 		}
 	}
 	si->nb_item = cnt;
-}
-
-uint64_t simple_index_dump_and_clean(struct simple_index* si, uint8_t sel, FILE* stream){
-	uint32_t i;
-	uint64_t cnt;
-
-	for (i = 0, cnt = 0; i < 0x10000; i++){
-		if (si->index[i] != NULL){
-			cnt += simple_entry_dump(si->index[i], si->size, sel, stream);
-			free(si->index[i]);
-			si->index[i] = NULL;
-		}
-	}
-	si->nb_item = 0;
-
-	return cnt;
 }
 
 void simple_index_clean(struct simple_index* si){

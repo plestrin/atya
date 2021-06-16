@@ -2,3 +2,4 @@ build/*.o
 create
 exclude
 adapter/__pycache__
+test?_stree

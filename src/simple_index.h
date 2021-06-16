@@ -3,18 +3,14 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 
 #include "hash.h"
 
 #define STATUS_NONE 0
 #define STATUS_HIT 1
-#define STATUS_PRO 2
 
 struct simple_entry_item {
-	struct simple_entry_item* lo;
-	struct simple_entry_item* hi;
 	uint8_t status;
 	const uint8_t* ptr;
 };
@@ -51,10 +47,10 @@ static inline uint16_t simple_index_hash_increase(struct simple_index* si, uint1
 	return hash_push(hash, ptr[si->size]);
 }
 
-int simple_index_insert_hash(struct simple_index* si, const uint8_t* ptr, uint16_t hash, struct simple_entry_item* lo, struct simple_entry_item* hi);
+int simple_index_insert_hash(struct simple_index* si, const uint8_t* ptr, uint16_t hash);
 
 static inline int simple_index_insert(struct simple_index* si, const uint8_t* ptr){
-	return simple_index_insert_hash(si, ptr, simple_index_hash_init(si, ptr), NULL, NULL);
+	return simple_index_insert_hash(si, ptr, simple_index_hash_init(si, ptr));
 }
 
 struct simple_entry_item* simple_index_compare_hash(struct simple_index* si, const uint8_t* ptr, uint16_t hash, uint8_t sel);
@@ -62,8 +58,6 @@ struct simple_entry_item* simple_index_compare_hash(struct simple_index* si, con
 uint64_t simple_index_compare_buffer(struct simple_index* si, const uint8_t* buffer, size_t size);
 
 void simple_index_remove(struct simple_index* si, uint8_t sel);
-
-uint64_t simple_index_dump_and_clean(struct simple_index* si, uint8_t sel, FILE* stream);
 
 void simple_index_clean(struct simple_index* si);
 
