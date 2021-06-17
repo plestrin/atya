@@ -290,7 +290,7 @@ static void abs_stree_skim(struct skim* sk, struct stree* tree, struct simple_in
 		}
 
 		if (stree_func(tree, data + start, i - start + si->size - 1, si->size)){
-			fprintf(stderr, "[-] in %s, unable to insert data in suffix tree\n", __func__);
+			fprintf(stderr, "[-] in %s, unable to process data in suffix tree\n", __func__);
 		}
 
 		skim_iter_next(&ski);

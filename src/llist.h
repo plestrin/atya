@@ -23,7 +23,7 @@ static inline void llist_init(struct llist* ll){
 static inline void llist_init_circular(struct llist* ll){
 	ll->prev = ll;
 	ll->next = ll;
-};
+}
 
 static inline struct llist* llist_get_head(struct llist* ll){
 	struct llist* ll_cursor;

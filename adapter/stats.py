@@ -11,7 +11,7 @@ for PATTERN in atya_iter():
 	if len(PATTERN) < MIN_PATTERN_LEN:
 		MIN_PATTERN_LEN = len(PATTERN)
 
-print('NB pattern: %u' % NB_PATTERN)
+print('Nb pattern: %u' % NB_PATTERN)
 if NB_PATTERN:
 	print('Min length: %u' % MIN_PATTERN_LEN)
 	print('Max length: %u' % MAX_PATTERN_LEN)

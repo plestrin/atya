@@ -14,13 +14,10 @@ static int make_simple_index(struct abs_storage* as, struct simple_index** si_pt
 	struct simple_index* si;
 	int status;
 
-	si = *si_ptr;
-	if (si == NULL){
-		if ((si = simple_index_create(size)) == NULL){
-			return ENOMEM;
-		}
-		*si_ptr = si;
+	if ((si = simple_index_create(size)) == NULL){
+		return ENOMEM;
 	}
+	*si_ptr = si;
 
 	si->size = size;
 
