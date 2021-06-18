@@ -51,10 +51,11 @@ static struct indexlo* index_dealloc(struct indexlo* index){
 	struct indexlo* index_new;
 
 	if (!index->nb_used){
+		free(index);
 		return NULL;
 	}
 
-	if (index->nb_alloc - index->nb_used > INDEX_LO_ALLOC_STEP){
+	if (index->nb_alloc - index->nb_used < INDEX_LO_ALLOC_STEP){
 		return index;
 	}
 
@@ -446,7 +447,7 @@ void stree_prune(struct stree* tree){
 			node_j->size = node_j->hit_size;
 			node_j->hit_size = 0;
 			if (!node_j->size){
-				for (k--; k != j; k-- ){
+				for (k--; k != j; k--){
 					node_k = stree_get_node(tree, i, k);
 					node_k->size = node_k->hit_size;
 					node_k->hit_size = 0;
