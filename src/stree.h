@@ -4,21 +4,14 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#define SNODE_FLAGS_PRUNE 1
-#define SNODE_FLAGS_HIT 2
-#define SNODE_FLAGS_EMASK 0xff00
-#define SNODE_FLAGS_E(nb) (((nb) & 0xff) << 8)
-#define SNODE_FLAGS_EINC(flags) ((flags) + 0x100)
-#define SNODE_FLAGS_EDEC(flags) ((flags) - 0x100)
-#define SNODE_FLAGS_IS_LEAF(flags) (!((flags) & SNODE_FLAGS_EMASK))
-
 struct snode {
-	uint32_t flags;
-	uint32_t parenthi;
+	uint16_t nb_child;
 	uint16_t parentlo;
+	uint32_t parenthi;
 	uint32_t edgehi;
 	size_t size;
 	const uint8_t* ptr;
+	size_t hit_size;
 	uint16_t edgelo[256];
 };
 

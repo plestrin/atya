@@ -7,7 +7,7 @@
 static size_t get_common_size(const uint8_t* ptr1, const uint8_t* ptr2, size_t ptr1_sz, size_t ptr2_sz){
 	size_t i;
 
-	for (i = 0; i < ptr1_sz && i < ptr2_sz; i++){
+	for (i = 1; i < ptr1_sz && i < ptr2_sz; i++){
 		if (ptr1[i] != ptr2[i]){
 			break;
 		}
@@ -47,6 +47,25 @@ static struct indexlo* indexlo_realloc(struct indexlo* index){
 	return index_new;
 }
 
+static struct indexlo* index_dealloc(struct indexlo* index){
+	struct indexlo* index_new;
+
+	if (!index->nb_used){
+		return NULL;
+	}
+
+	if (index->nb_alloc - index->nb_used > INDEX_LO_ALLOC_STEP){
+		return index;
+	}
+
+	if ((index_new = realloc(index, sizeof(struct indexlo) + sizeof(struct snode) * index->nb_used)) == NULL){
+		return index;
+	}
+
+	index_new->nb_alloc = index_new->nb_used;
+
+	return index_new;
+}
 
 #define INDEX_HI_ALLOC_STEP 1024
 
@@ -172,12 +191,67 @@ static inline struct snode* stree_get_node(struct stree* tree, uint32_t edgehi, 
 	return tree->index->buffer[edgehi]->buffer + edgelo;
 }
 
+static void stree_node_link_parent(struct stree* tree, struct snode* node, uint16_t edgelo){
+	struct snode* parent;
+
+	if (node->parenthi == INVALID_EDGE_HI){
+		tree->root.edgelo[node->ptr[0]] = edgelo;
+	}
+	else {
+		parent = stree_get_node(tree, node->parenthi, node->parentlo);
+		parent->nb_child++;
+		parent->edgelo[node->ptr[0]] = edgelo;
+	}
+}
+
+static void stree_node_unlink_parent(struct stree* tree, struct snode* node){
+	struct snode* parent;
+
+	if (node->parenthi == INVALID_EDGE_HI){
+		tree->root.edgelo[node->ptr[0]] = INVALID_EDGE_LO;
+	}
+	else {
+		parent = stree_get_node(tree, node->parenthi, node->parentlo);
+		parent->edgelo[node->ptr[0]] = INVALID_EDGE_LO;
+		parent->nb_child--;
+	}
+}
+
+static void stree_node_relink_parent(struct stree* tree, struct snode* node, uint16_t edgelo){
+	struct snode* parent;
+
+	if (node->parenthi == INVALID_EDGE_HI){
+		tree->root.edgelo[node->ptr[0]] = edgelo;
+	}
+	else {
+		parent = stree_get_node(tree, node->parenthi, node->parentlo);
+		parent->edgelo[node->ptr[0]] = edgelo;
+	}
+}
+
+static void stree_node_relink_childs(struct stree* tree, struct snode* node, uint32_t edgehi, uint16_t edgelo){
+	uint32_t i;
+	struct snode* child;
+
+	for (i = 0; i < 0x100; i++){
+		if (node->edgelo[i] != INVALID_EDGE_LO){
+			child = stree_get_node(tree, node->edgehi, node->edgelo[i]);
+			child->parenthi = edgehi;
+			child->parentlo = edgelo;
+		}
+	}
+}
+
+static void stree_node_movlo(struct stree* tree, struct snode* node, uint32_t edgehi, uint16_t edgelo){
+	stree_node_relink_parent(tree, node, edgelo);
+	stree_node_relink_childs(tree, node, edgehi, edgelo);
+}
+
 static int stree_split_node(struct stree* tree, uint32_t edgehi, uint16_t edgelo, size_t split_size){
 	uint32_t newedgehi;
 	uint16_t newedgelo;
 	struct snode* node;
 	struct snode* new_node;
-	uint32_t i;
 
 	if ((newedgehi = stree_reserve_edges(tree)) == INVALID_EDGE_HI){
 		return -1;
@@ -197,17 +271,9 @@ static int stree_split_node(struct stree* tree, uint32_t edgehi, uint16_t edgelo
 	new_node->size -= split_size;
 	new_node->ptr += split_size;
 
-	for (i = 0; i < 0x100; i++){
-		struct snode* child;
+	stree_node_relink_childs(tree, new_node, newedgehi, newedgelo);
 
-		if (new_node->edgelo[i] != INVALID_EDGE_LO){
-			child = stree_get_node(tree, new_node->edgehi, new_node->edgelo[i]);
-			child->parenthi = newedgehi;
-			child->parentlo = newedgelo;
-		}
-	}
-
-	node->flags = (node->flags & ~SNODE_FLAGS_EMASK) | SNODE_FLAGS_E(1);
+	node->nb_child = 1;
 	node->edgehi = newedgehi;
 	memset(node->edgelo, 0xff, sizeof node->edgelo);
 	node->edgelo[node->ptr[split_size]] = newedgelo;
@@ -232,28 +298,21 @@ int stree_insert(struct stree* tree, const uint8_t* ptr, size_t size){
 	for (parenthi = INVALID_EDGE_HI, parentlo = INVALID_EDGE_LO, edgehi = 0, edgelo = tree->root.edgelo[ptr[0]], offset = 0; ; edgehi = node->edgehi, edgelo = node->edgelo[ptr[offset]]){
 		if (edgelo == INVALID_EDGE_LO){
 			uint16_t edgelo_new;
-			struct snode* parent;
 
 			if ((edgelo_new = stree_alloc_edge(tree, edgehi, 1)) == INVALID_EDGE_LO){
 				return -1;
 			}
 
-			if (parenthi == INVALID_EDGE_HI){
-				tree->root.edgelo[ptr[0]] = edgelo_new;
-			}
-			else {
-				parent = stree_get_node(tree, parenthi, parentlo);
-				parent->flags = SNODE_FLAGS_EINC(parent->flags);
-				parent->edgelo[ptr[offset]] = edgelo_new;
-			}
-
 			node = stree_get_node(tree, edgehi, edgelo_new);
-			node->flags = 0;
+			node->nb_child = 0;
 			node->parenthi = parenthi;
 			node->parentlo = parentlo;
 			node->ptr = ptr + offset;
 			node->size = size - offset;
+			node->hit_size = 0;
 			memset(node->edgelo, 0xff, sizeof node->edgelo);
+
+			stree_node_link_parent(tree, node, edgelo_new);
 
 			return 0;
 		}
@@ -274,9 +333,9 @@ int stree_insert(struct stree* tree, const uint8_t* ptr, size_t size){
 			}
 			node = stree_get_node(tree, edgehi, edgelo);
 		}
-		else if (SNODE_FLAGS_IS_LEAF(node->flags)){
+		else if (!node->nb_child){
 			node->ptr = ptr + offset;
-			node->size = size;
+			node->size = size - offset;
 			return 0;
 		}
 
@@ -304,8 +363,6 @@ int stree_insert_all(struct stree* tree, const uint8_t* ptr, size_t size, size_t
 }
 
 int stree_intersect(struct stree* tree, const uint8_t* ptr, size_t size){
-	uint32_t parenthi;
-	uint16_t parentlo;
 	uint32_t edgehi;
 	uint16_t edgelo;
 	size_t offset;
@@ -316,26 +373,24 @@ int stree_intersect(struct stree* tree, const uint8_t* ptr, size_t size){
 		return 0;
 	}
 
-	for (parenthi = INVALID_EDGE_HI, parentlo = INVALID_EDGE_LO, edgehi = 0, edgelo = tree->root.edgelo[ptr[0]], offset = 0; ; edgehi = node->edgehi, edgelo = node->edgelo[ptr[offset]]){
+	for (edgehi = 0, edgelo = tree->root.edgelo[ptr[0]], offset = 0; ; edgehi = node->edgehi, edgelo = node->edgelo[ptr[offset]]){
 		if (edgelo == INVALID_EDGE_LO){
 			return 0;
 		}
 
 		node = stree_get_node(tree, edgehi, edgelo);
-		parenthi = edgehi;
-		parentlo = edgelo;
 
 		common_size = get_common_size(node->ptr, ptr + offset, node->size, size - offset);
 
-		if (common_size < node->size){
-			if (stree_split_node(tree, edgehi, edgelo, common_size)){
-				return -1;
-			}
+		if (common_size > node->hit_size){
+			node->hit_size = common_size;
 		}
 
-		node->flags |= SNODE_FLAGS_HIT;
-
 		if (offset + common_size == size){
+			return 1;
+		}
+
+		if (common_size < node->size){
 			return 0;
 		}
 
@@ -347,26 +402,22 @@ int stree_intersect(struct stree* tree, const uint8_t* ptr, size_t size){
 
 int stree_intersect_all(struct stree* tree, const uint8_t* ptr, size_t size, size_t min_size){
 	size_t i;
-	int status;
 
-	if (size < min_size){
-		return 0;
-	}
-
-	for (i = 0; i <= size - min_size; i++){
-		if ((status = stree_intersect(tree, ptr + i, size - i))){
-			break;
+	if (size >= min_size){
+		for (i = 0; i <= size - min_size; i++){
+			stree_intersect(tree, ptr + i, size - i);
 		}
 	}
 
-	return status;
+	return 0;
 }
 
 void stree_prune(struct stree* tree){
 	uint32_t i;
 	uint32_t j;
-	struct snode* node;
-	struct snode* parent;
+	uint32_t k;
+	struct snode* node_j;
+	struct snode* node_k;
 
 	if (tree->index == NULL){
 		return;
@@ -378,25 +429,37 @@ void stree_prune(struct stree* tree){
 		}
 
 		for (j = 0; j < tree->index->buffer[i]->nb_used; j++){
-			node = stree_get_node(tree, i, j);
-			if (node->flags & SNODE_FLAGS_PRUNE){
-				continue;
+			node_j = stree_get_node(tree, i, j);
+			if (!node_j->hit_size){
+				stree_node_unlink_parent(tree, node_j);
 			}
-
-			if (!(node->flags & SNODE_FLAGS_HIT)){
-				node->flags |= SNODE_FLAGS_PRUNE;
-
-				if (node->parenthi == INVALID_EDGE_HI){
-					tree->root.edgelo[node->ptr[0]] = INVALID_EDGE_LO;
-				}
-				else {
-					parent = stree_get_node(tree, node->parenthi, node->parentlo);
-					parent->edgelo[node->ptr[0]] = INVALID_EDGE_LO;
-					parent->flags = SNODE_FLAGS_EDEC(parent->flags);
-				}
-			}
-			node->flags &= ~SNODE_FLAGS_HIT;
 		}
+	}
+
+	for (i = 0; i <= tree->index->current; i++){
+		if (tree->index->buffer[i] == NULL){
+			continue;
+		}
+
+		for (j = 0, k = tree->index->buffer[i]->nb_used; j < k; j++){
+			node_j = stree_get_node(tree, i, j);
+			node_j->size = node_j->hit_size;
+			node_j->hit_size = 0;
+			if (!node_j->size){
+				for (k--; k != j; k-- ){
+					node_k = stree_get_node(tree, i, k);
+					node_k->size = node_k->hit_size;
+					node_k->hit_size = 0;
+					if (node_k->size){
+						memcpy(node_j, node_k, sizeof(struct snode));
+						stree_node_movlo(tree, node_j, i, j);
+						break;
+					}
+				}
+			}
+		}
+		tree->index->buffer[i]->nb_used = k;
+		tree->index->buffer[i] = index_dealloc(tree->index->buffer[i]);
 	}
 }
 
@@ -429,7 +492,7 @@ static int stree_iterator_forward(struct stree_iterator* sti, struct stree* tree
 	memcpy(sti->ptr + sti->offset, node->ptr, node->size);
 	sti->offset += node->size;
 
-	if (SNODE_FLAGS_IS_LEAF(node->flags)){
+	if (!node->nb_child){
 		return 0;
 	}
 

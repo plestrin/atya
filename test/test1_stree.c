@@ -36,11 +36,8 @@ static void stree_print_node(struct stree* tree, uint32_t edgehi, uint16_t edgel
 
 	print_data(node->ptr, node->size);
 
-	if (node->flags & SNODE_FLAGS_HIT){
-		fputs(" HIT", stdout);
-	}
 
-	if (SNODE_FLAGS_IS_LEAF(node->flags)){
+	if (!node->nb_child){
 		fputs(" LEAF\n", stdout);
 	}
 	else {
@@ -70,6 +67,7 @@ static void stree_check(struct stree* tree){
 	uint32_t k;
 	uint32_t cnt;
 	struct snode* node;
+	struct snode* child;
 
 	if (tree->index == NULL){
 		return;
@@ -87,17 +85,33 @@ static void stree_check(struct stree* tree){
 				if (i || node->parentlo != 0xffff){
 					fprintf(stderr, "[-] parent error\n");
 				}
+				if (tree->root.edgelo[node->ptr[0]] != i){
+					fprintf(stderr, "[-] broken link @ root\n");
+				}
 			}
 
+			if (!node->size){
+				fprintf(stderr, "[-] size error\n");
+			}
 
 			for (k = 0, cnt = 0; k < 0x100; k++){
 				if (node->edgelo[k] != 0xffff){
 					cnt ++;
+					child = stree_get_node(tree, node->edgehi, node->edgelo[k]);
+					if (child->parenthi != i){
+						fprintf(stderr, "[-] broken link hi: %u != %u\n", child->parenthi, i);
+					}
+					if (child->parentlo != j){
+						fprintf(stderr, "[-] broken link lo: %u != %u\n", child->parentlo, j);
+					}
+					if (child->ptr[0] != k){
+						fprintf(stderr, "[-] broken link value\n");
+					}
 				}
 			}
 
-			if (SNODE_FLAGS_E(cnt) != (node->flags & SNODE_FLAGS_EMASK)){
-				fprintf(stderr, "[-] edge count error\n");
+			if (cnt != node->nb_child){
+				fprintf(stderr, "[-] child count error\n");
 			}
 		}
 	}
@@ -107,6 +121,8 @@ int main(int argc, char** argv){
 	int status = EXIT_SUCCESS;
 	struct stree tree;
 	int i;
+
+	printf("[+] size of struct snode: %zu\n", sizeof(struct snode));
 
 	if (stree_init(&tree)){
 		fprintf(stderr, "[-] cannot init suffix tree\n");
