@@ -43,10 +43,6 @@ static inline uint16_t simple_index_hash_next(struct simple_index* si, uint16_t 
 	return hash_update(hash, ptr[0], ptr[si->size], si->size);
 }
 
-static inline uint16_t simple_index_hash_increase(struct simple_index* si, uint16_t hash, const uint8_t* ptr){
-	return hash_push(hash, ptr[si->size]);
-}
-
 int simple_index_insert_hash(struct simple_index* si, const uint8_t* ptr, uint16_t hash);
 
 static inline int simple_index_insert(struct simple_index* si, const uint8_t* ptr){

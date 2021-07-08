@@ -6,7 +6,7 @@
 
 #include "simple_index.h"
 
-#define SIMPLE_INDEX_ALLOC_STEP 16
+#define SIMPLE_INDEX_ALLOC_STEP 64
 
 static int simple_entry_insert(struct simple_entry** se_ptr, const uint8_t* ptr){
 	struct simple_entry* se;
@@ -54,9 +54,10 @@ static struct simple_entry_item* simple_entry_compare(struct simple_entry* se, c
 	return NULL;
 }
 
-static uint32_t simple_entry_remove(struct simple_entry* se, uint8_t sel){
+static struct simple_entry* simple_entry_remove(struct simple_entry* se, uint8_t sel){
 	uint32_t i;
 	uint32_t j;
+	struct simple_entry* new_se;
 
 	for (i = 0, j = se->nb_item; i < se->nb_item; i++){
 		if ((se->items[i].status & STATUS_HIT) == (sel & STATUS_HIT)){
@@ -72,7 +73,24 @@ static uint32_t simple_entry_remove(struct simple_entry* se, uint8_t sel){
 		se->items[i].status = STATUS_NONE;
 	}
 
-	return j;
+	if (!j){
+		free(se);
+		return NULL;
+	}
+
+	se->nb_item = j;
+	if (se->nb_alloc - se->nb_item < SIMPLE_INDEX_ALLOC_STEP){
+		return se;
+	}
+
+	if ((new_se = realloc(se, sizeof(struct simple_entry) + sizeof(struct simple_entry_item) * se->nb_item)) == NULL){
+		fprintf(stderr, "[-] in %s, unable to reallocate memory\n", __func__);
+		return se;
+	}
+
+	new_se->nb_alloc = new_se->nb_item;
+
+	return new_se;
 }
 
 struct simple_index* simple_index_create(size_t size){
@@ -130,18 +148,13 @@ uint64_t simple_index_compare_buffer(struct simple_index* si, const uint8_t* buf
 
 void simple_index_remove(struct simple_index* si, uint8_t sel){
 	uint32_t i;
-	uint32_t local_cnt;
 	uint64_t cnt;
 
 	for (i = 0, cnt = 0; i < 0x10000; i++){
 		if (si->index[i] != NULL){
-			local_cnt = simple_entry_remove(si->index[i], sel);
-			if (!local_cnt){
-				free(si->index[i]);
-				si->index[i] = NULL;
-			}
-			else {
-				cnt += local_cnt;
+			si->index[i] = simple_entry_remove(si->index[i], sel);
+			if (si->index[i] != NULL){
+				cnt += si->index[i]->nb_item;
 			}
 		}
 	}
