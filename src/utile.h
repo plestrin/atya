@@ -18,5 +18,4 @@ int load_file(const char* file_name, uint8_t** data_ptr, size_t* size_ptr);
 		fprintf(stderr, "[+] " M "\n", ##__VA_ARGS__); 	\
 	}
 
-
 #endif

@@ -5,11 +5,9 @@
 
 struct skim {
 	struct simple_set ss_index;
-	uint8_t* data;
-	size_t size;
 };
 
-int skim_init(struct skim* sk, uint8_t* data, size_t size);
+int skim_init(struct skim* sk, size_t size);
 
 int skim_add_data(struct skim* sk, size_t off, size_t size);
 
